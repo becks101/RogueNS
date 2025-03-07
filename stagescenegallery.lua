@@ -8,74 +8,74 @@ StageSceneGallery.__index = StageSceneGallery
 
 function StageSceneGallery.new()
     local self = setmetatable({}, StageSceneGallery)
-    -- Lista de módulos de stage scene (adicione quantos desejar)
-    self.stageScenesList = {
-        "stages/ss_mast01"
-        -- Exemplo: "SS-OutroStage", "SS-Example", etc.
-    }
+    self.currentTab = "stage"
+    self.stageScenesList = {"stages/ss_mast01"}
     self.icons = {}
-    self.currentStageScene = nil  -- Armazena a stage scene ativa, se houver
-    self:createIcons()
-    -- Botão de voltar para a galeria quando uma stage scene estiver ativa
-    self.backButton = ButtonTypes.Button.new(10, 10, 100, 40, "Voltar", function()
-        self.currentStageScene = nil
+    self.currentScene = nil  -- Nova propriedade para armazenar a cena ativa
+    self.backButton = ButtonTypes.Button.new(20, 20, 100, 40, "Voltar", function()
+        self.currentScene = nil
     end)
+    self:refreshIcons()
     return self
 end
 
--- Cria os ícones para cada stage scene
-function StageSceneGallery:createIcons()
-    local screenWidth, screenHeight = love.graphics.getDimensions()
-    local startX = 50
-    local startY = 150  -- Mais espaço para as abas
-    local spacingX = 100
-    local spacingY = 100
-    local cols = math.floor((screenWidth - 100) / (spacingX + 100)) or 4  -- Colunas dinâmicas
+function StageSceneGallery:refreshIcons()
+    self.icons = {} -- Resetar ícones
     
-    for i, moduleName in ipairs(self.stageScenesList) do
-        local stageData = require(moduleName)
-        local col = ((i - 1) % cols)
-        local row = math.floor((i - 1) / cols)
-        local x = startX + col * spacingX
-        local y = startY + row * spacingY
+    if self.currentTab == "stage" then
+        local screenWidth, screenHeight = love.graphics.getDimensions()
+        local startX = 50
+        local startY = 150
+        local spacingX = 120
+        local spacingY = 120
+        local cols = math.max(1, math.floor((screenWidth - 100) / spacingX))
         
-        local icon = GaleryIcons.new(x, y, stageData.IconeLarge, stageData.nome, function()
-            self.currentStageScene = StageScene.new(moduleName)
-            self.currentStageScene:load()
-        end)
-        table.insert(self.icons, icon)
+        for i, moduleName in ipairs(self.stageScenesList) do
+            local col = (i - 1) % cols
+            local row = math.floor((i - 1) / cols)
+            local x = startX + col * spacingX
+            local y = startY + row * spacingY
+            
+            local success, sceneData = pcall(require, moduleName)
+            if success then
+                local icon = GaleryIcons.new(
+                    x, y,
+                    sceneData.IconeLarge,
+                    sceneData.nome,
+                    function()
+                        -- Cria nova instância ao invés de reusar
+                        self.currentScene = StageScene.new(moduleName)
+                        self.currentScene:load()
+                    end
+                )
+                table.insert(self.icons, icon)
+            else
+                print("Erro ao carregar cena:", moduleName, sceneData)
+            end
+        end
     end
 end
 
 function StageSceneGallery:update(dt)
-    local mx, my = love.mouse.getPosition()
-    if self.currentStageScene then
-        self.currentStageScene:update(dt)
-        self.backButton:updateHover(mx, my)
-        if self.backButton.update then self.backButton:update(dt) end
-    else
-        for _, icon in ipairs(self.icons) do
-            icon:updateHover(mx, my)
-        end
+    if self.currentScene then
+        self.currentScene:update(dt)
+        self.backButton:updateHover(love.mouse.getPosition())
     end
 end
 
 function StageSceneGallery:draw()
-    if self.currentStageScene then
-        self.currentStageScene:draw()
+    if self.currentScene then
+        self.currentScene:draw()
         self.backButton:draw()
-    else
-        for _, icon in ipairs(self.icons) do
-            icon:draw()
-        end
     end
 end
 
 function StageSceneGallery:mousepressed(x, y, button)
-    if self.currentStageScene then
-        self.currentStageScene:mousepressed(x, y, button)
+    if self.currentScene then
+        -- Apenas o botão "Voltar" está ativo durante a visualização da cena
         self.backButton:mousepressed(x, y, button)
     else
+        -- Processa cliques nos ícones da galeria
         for _, icon in ipairs(self.icons) do
             icon:mousepressed(x, y, button)
         end

@@ -32,24 +32,36 @@ end
 
 function Menu:loadGalleryMenu()
     self.currentMenu = "gallery"
-    self.galleryPlayer = nil
-    local screenWidth, screenHeight = love.graphics.getDimensions()
+    self.galleryPlayer = require("stagescenegallery").new()
     
-    -- Layout responsivo para abas
+    local screenWidth = love.graphics.getDimensions()
     local tabWidth = 150
     local tabSpacing = 20
     local totalTabsWidth = (tabWidth * 3) + (tabSpacing * 2)
     local startX = (screenWidth - totalTabsWidth)/2
     
     self.buttons = {
-        ButtonTypes.Tab.new(startX, 100, tabWidth, 50, "Itens", function() print("Aba: Itens") end),
-        ButtonTypes.Tab.new(startX + tabWidth + tabSpacing, 100, tabWidth, 50, "Cenas de Fase", function() 
-            self.galleryPlayer = require("stagescenegallery").new()
+        ButtonTypes.Tab.new(startX, 100, tabWidth, 50, "Itens", function() 
+            self.galleryPlayer.currentTab = "items"
+            self.galleryPlayer:refreshIcons()
         end),
-        ButtonTypes.Tab.new(startX + (tabWidth + tabSpacing)*2, 100, tabWidth, 50, "Cutscenes", function() print("Aba: Cutscenes") end),
-        ButtonTypes.Button.new((screenWidth - 200)/2, screenHeight - 100, 200, 50, "Voltar", function() self:loadMainMenu() end)
+        ButtonTypes.Tab.new(startX + tabWidth + tabSpacing, 100, tabWidth, 50, "Cenas de Fase", function() 
+            self.galleryPlayer.currentTab = "stage"
+            self.galleryPlayer:refreshIcons()
+        end),
+        ButtonTypes.Tab.new(startX + (tabWidth + tabSpacing)*2, 100, tabWidth, 50, "Cutscenes", function() 
+            self.galleryPlayer.currentTab = "cutscenes"
+            self.galleryPlayer:refreshIcons()
+        end),
+        ButtonTypes.Button.new((screenWidth - 200)/2, love.graphics.getHeight() - 100, 200, 50, "Voltar", function() 
+            self:loadMainMenu() 
+        end)
     }
+    
+    -- Forçar refresh inicial
+    self.galleryPlayer:refreshIcons()
 end
+
 
 function Menu:loadSettingsMenu()
     local Config = require "config"
@@ -123,11 +135,26 @@ function Menu:loadSettingsMenu()
     end
 end
 
+
 function Menu:update(dt)
     local mx, my = love.mouse.getPosition()
-    if self.galleryPlayer then
-        self.galleryPlayer:update(dt)
+    
+    if self.currentMenu == "gallery" and self.galleryPlayer then
+        if self.galleryPlayer.currentScene then
+            -- Modo visualização de cena: atualiza apenas a cena e botão voltar
+            self.galleryPlayer:update(dt)
+        else
+            -- Modo galeria normal: atualiza ícones e botões das abas
+            for _, icon in ipairs(self.galleryPlayer.icons) do
+                icon:updateHover(mx, my)
+            end
+            for _, button in ipairs(self.buttons) do
+                if button.updateHover then button:updateHover(mx, my) end
+                if button.update then button:update(dt) end
+            end
+        end
     else
+        -- Atualiza outros menus
         for _, button in ipairs(self.buttons) do
             if button.updateHover then button:updateHover(mx, my) end
             if button.update then button:update(dt) end
@@ -136,14 +163,25 @@ function Menu:update(dt)
 end
 
 function Menu:draw()
-    if self.galleryPlayer then
-        self.galleryPlayer:draw()
+    if self.currentMenu == "gallery" and self.galleryPlayer then
+        if self.galleryPlayer.currentScene then
+            -- Modo visualização da cena
+            self.galleryPlayer:draw()
+        else
+            -- Modo galeria normal
+            for _, icon in ipairs(self.galleryPlayer.icons) do
+                icon:draw()
+            end
+            for _, button in ipairs(self.buttons) do
+                button:draw()
+            end
+        end
     else
+        -- Desenha outros menus
         if self.currentMenu == "settings" then
             love.graphics.setColor(1, 1, 1)
             local screenWidth = love.graphics.getDimensions()
             
-            -- Títulos centralizados
             local titles = {
                 {text = "Fullscreen", y = 50},
                 {text = "Volume", y = 130}
@@ -156,18 +194,38 @@ function Menu:draw()
             end
         end
         
+        -- Desenha botões do menu atual
         for _, button in ipairs(self.buttons) do
             if button.draw then button:draw() end
         end
     end
 end
 
+
 function Menu:mousepressed(x, y, button)
-    if self.galleryPlayer then
-        self.galleryPlayer:mousepressed(x, y, button)
+    if self.currentMenu == "gallery" and self.galleryPlayer then
+        if self.galleryPlayer.currentScene then
+            -- Modo visualização de cena: passa o evento para o stagescenegallery
+            if self.galleryPlayer.mousepressed then
+                self.galleryPlayer:mousepressed(x, y, button)
+            end
+        else
+            -- Modo galeria: processa ícones e botões das abas
+            for _, icon in ipairs(self.galleryPlayer.icons) do
+                icon:mousepressed(x, y, button)
+            end
+            for _, btn in ipairs(self.buttons) do
+                if btn.mousepressed then
+                    btn:mousepressed(x, y, button)
+                end
+            end
+        end
     else
+        -- Outros menus
         for _, btn in ipairs(self.buttons) do
-            if btn.mousepressed then btn:mousepressed(x, y, button) end
+            if btn.mousepressed then
+                btn:mousepressed(x, y, button)
+            end
         end
     end
 end
