@@ -1,6 +1,18 @@
 local Config = require "config"
 local Menu = require "menu"
 
+function love.resize(w, h)
+    if menu and menu.loadMainMenu then  -- Recarrega o menu atual
+        if menu.currentMenu == "main" then
+            menu:loadMainMenu()
+        elseif menu.currentMenu == "gallery" then
+            menu:loadGalleryMenu()
+        elseif menu.currentMenu == "settings" then
+            menu:loadSettingsMenu()
+        end
+    end
+end
+
 function love.load()
     -- Carrega as configurações salvas (ex.: fullscreen, volume, etc.)
     Config.load()

@@ -11,6 +11,7 @@ function Config.setFullscreen(value)
     Config.settings.fullscreen = value
     love.window.setFullscreen(value)
     Save.saveConfig(Config.settings)
+    love.resize(love.graphics.getWidth(), love.graphics.getHeight())  -- Forçar redimensionamento
 end
 
 function Config.setVolume(value)

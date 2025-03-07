@@ -25,11 +25,12 @@ end
 
 -- Cria os ícones para cada stage scene
 function StageSceneGallery:createIcons()
+    local screenWidth, screenHeight = love.graphics.getDimensions()
     local startX = 50
-    local startY = 50
+    local startY = 150  -- Mais espaço para as abas
     local spacingX = 100
     local spacingY = 100
-    local cols = 4  -- Número de colunas
+    local cols = math.floor((screenWidth - 100) / (spacingX + 100)) or 4  -- Colunas dinâmicas
     
     for i, moduleName in ipairs(self.stageScenesList) do
         local stageData = require(moduleName)
