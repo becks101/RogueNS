@@ -1,0 +1,16 @@
+# Arquivos do Love2D
+*.exe
+*.zip
+*.love
+
+# Arquivos temporários
+*.swp
+*.swo
+
+# Diretórios
+.vscode/
+bin/
+  git config --global user.name "becks101"
+  git config --global user.email "guggm1001@gmail.com"
+  
+  git remote add origin https://github.com/becks101/RogueNS.git
