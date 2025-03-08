@@ -114,12 +114,15 @@ function Tab:mousepressed(x, y, button)
 end
 
 function Tab:draw()
-    love.graphics.setColor(self.selected and UIColors.selected or (self.hover and UIColors.hover or UIColors.default))
+    -- Altera a cor baseado no estado de seleção
+    local color = self.selected and UIColors.selected or 
+                 (self.hover and UIColors.hover or UIColors.default)
+    
+    love.graphics.setColor(color)
     love.graphics.rectangle("line", self.x, self.y, self.width, self.height)
-    love.graphics.printf(self.label, self.x, self.y + self.height / 2 - 6, self.width, "center")
+    love.graphics.printf(self.label, self.x, self.y + self.height/2 - 6, self.width, "center")
     love.graphics.setColor(1, 1, 1)
 end
-
 -- Classe Volume Slider: barra de volume deslizante
 local VolumeSlider = {}
 VolumeSlider.__index = VolumeSlider

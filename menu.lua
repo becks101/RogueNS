@@ -7,7 +7,7 @@ function Menu.new()
     local self = setmetatable({}, Menu)
     self.currentMenu = "main"
     self.buttons = {}
-    self.galleryPlayer = nil  -- Para a galeria de stage scenes
+    self.galleryPlayer = nil  -- Para a galeria (agora mais genérica)
     self:loadMainMenu()
     return self
 end
@@ -32,36 +32,68 @@ end
 
 function Menu:loadGalleryMenu()
     self.currentMenu = "gallery"
-    self.galleryPlayer = require("stagescenegallery").new()
+    -- Usa o novo GaleryManager em vez de stagescenegallery
+    self.galleryPlayer = require("galeryManager").new()
+    self.buttons = {} -- Limpa os botões anteriores
+    self.tabs = {}    -- Limpa as abas anteriores
     
     local screenWidth = love.graphics.getDimensions()
     local tabWidth = 150
     local tabSpacing = 20
     local totalTabsWidth = (tabWidth * 3) + (tabSpacing * 2)
     local startX = (screenWidth - totalTabsWidth)/2
+
+    -- Cria container para as abas
+    self.tabs = {}
     
-    self.buttons = {
-        ButtonTypes.Tab.new(startX, 100, tabWidth, 50, "Itens", function() 
-            self.galleryPlayer.currentTab = "items"
-            self.galleryPlayer:refreshIcons()
-        end),
-        ButtonTypes.Tab.new(startX + tabWidth + tabSpacing, 100, tabWidth, 50, "Cenas de Fase", function() 
-            self.galleryPlayer.currentTab = "stage"
-            self.galleryPlayer:refreshIcons()
-        end),
-        ButtonTypes.Tab.new(startX + (tabWidth + tabSpacing)*2, 100, tabWidth, 50, "Cutscenes", function() 
-            self.galleryPlayer.currentTab = "cutscenes"
-            self.galleryPlayer:refreshIcons()
-        end),
-        ButtonTypes.Button.new((screenWidth - 200)/2, love.graphics.getHeight() - 100, 200, 50, "Voltar", function() 
-            self:loadMainMenu() 
-        end)
+    -- Função para desselecionar todas as abas
+    local function deselectAllTabs()
+        for _, tab in ipairs(self.tabs) do
+            tab.selected = false
+        end
+    end
+
+    -- Cria as abas
+    local tabsData = {
+        {label = "Itens", tabName = "items"},
+        {label = "Cenas de Fase", tabName = "stage"}, 
+        {label = "Cutscenes", tabName = "cutscenes"}
     }
+
+    for i, data in ipairs(tabsData) do
+        local tabIndex = i -- Captura o índice atual
+        local tab = ButtonTypes.Tab.new(
+            startX + ((tabWidth + tabSpacing) * (i-1)),
+            100,
+            tabWidth,
+            50,
+            data.label,
+            function()
+                deselectAllTabs()
+                self.tabs[tabIndex].selected = true -- Acessa pela tabela
+                self.galleryPlayer.currentTab = data.tabName
+                self.galleryPlayer:refreshIcons()
+            end
+        )
+        table.insert(self.tabs, tab)
+        table.insert(self.buttons, tab)
+    end
+
+    -- Seleciona a aba padrão inicialmente
+    self.tabs[2].selected = true  -- "Cenas de Fase"
+    self.galleryPlayer.currentTab = "stage"
     
-    -- Forçar refresh inicial
+    -- Adiciona botão voltar
+    table.insert(self.buttons, ButtonTypes.Button.new(
+        (screenWidth - 200)/2, 
+        love.graphics.getHeight() - 100, 
+        200, 50, 
+        "Voltar", 
+        function() self:loadMainMenu() end
+    ))
+    
     self.galleryPlayer:refreshIcons()
 end
-
 
 function Menu:loadSettingsMenu()
     local Config = require "config"
@@ -205,7 +237,7 @@ end
 function Menu:mousepressed(x, y, button)
     if self.currentMenu == "gallery" and self.galleryPlayer then
         if self.galleryPlayer.currentScene then
-            -- Modo visualização de cena: passa o evento para o stagescenegallery
+            -- Modo visualização de cena: passa o evento para o galeryManager
             if self.galleryPlayer.mousepressed then
                 self.galleryPlayer:mousepressed(x, y, button)
             end
@@ -237,6 +269,13 @@ function Menu:mousereleased(x, y, button)
         for _, btn in ipairs(self.buttons) do
             if btn.mousereleased then btn:mousereleased(x, y, button) end
         end
+    end
+end
+
+function Menu:keypressed(key)
+    -- Adicionar suporte para eventos de teclado, necessário para cutscenes
+    if self.currentMenu == "gallery" and self.galleryPlayer and self.galleryPlayer.keypressed then
+        self.galleryPlayer:keypressed(key)
     end
 end
 

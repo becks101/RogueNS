@@ -1,170 +1,142 @@
--Visão Geral
--Estrutura do Projeto
--Descrição dos Arquivos e Módulos
--Fluxo de Execução
--Possíveis Melhorias e Expansões
--📌 1. Visão Geral
-Este projeto é um jogo de ritmo desenvolvido em LÖVE2D com um sistema modular. Ele contém menus interativos, um sistema de botões personalizável, uma galeria de cenas e um player de Stage Scenes que permite visualizar animações predefinidas.
+# Documentação do Jogo em LÖVE2D
 
-Os principais objetivos do projeto incluem:
+## Visão Geral da Estrutura
 
-✅ Sincronização de ritmo usando um sistema baseado em BPM.
-✅ UI modular com botões organizados em menus e seletores.
-✅ Sistema de save/load para configurações e progresso do jogo.
-✅ Galeria interativa, permitindo visualizar Itens, Cutscenes e Stage Scenes.
-✅ Sistema de animações, permitindo tocar efeitos de cena carregados dinamicamente.
+Este projeto consiste em um jogo desenvolvido em Lua utilizando o framework LÖVE2D. A arquitetura do jogo implementa um sistema de menus, galeria de conteúdo e sistema de cutscenes para storytelling.
 
-📁 2. Estrutura do Projeto
-A estrutura do projeto segue um padrão modular, com cada funcionalidade separada em um arquivo próprio:
+## Principais Módulos
 
-css
-Copiar
-Editar
-📂 MeuJogo
- ├── main.lua
- ├── config.lua
- ├── save.lua
- ├── button.lua
- ├── menu.lua
- ├── stagescenes.lua
- ├── stagescenegallery.lua
- ├── assets/
- │   ├── icons/
- │   ├── sprites/
- │   ├── backgrounds/
- ├── stages/
- │   ├── SS-Mast1.lua
- │   ├── SS-Exemplo.lua
-📝 3. Descrição dos Arquivos e Módulos
-🔹 main.lua
-📌 Função: Arquivo principal do jogo, gerencia a inicialização do LÖVE2D e carrega os módulos.
+### 1. Sistema de Interface (`button.lua`)
 
-Responsabilidades:
+Este módulo fornece elementos de UI reutilizáveis para diferentes partes do jogo.
 
-Inicializa os módulos de menu e configurações.
-Gerencia a atualização e renderização da tela.
-Passa eventos de mouse para os módulos corretos.
-🔹 config.lua
-📌 Função: Gerencia as configurações do jogo, como fullscreen e volume.
+#### Classes Implementadas:
+- **Button**: Implementação básica de botão interativo
+- **Selector**: Botão que mantém estado de seleção
+- **Tab**: Botão para navegação entre abas
+- **VolumeSlider**: Controle deslizante para ajuste de volume
+- **GaleryIcons**: Ícones clicáveis com efeitos de hover para a galeria
 
-Responsabilidades:
+#### Funcionalidades:
+- Sistema de hover (detecção de mouse sobre o elemento)
+- Callbacks para interação com cliques
+- Efeitos visuais para feedback ao usuário
+- Suporte a diferentes estados visuais (normal, hover, selecionado)
 
-Carrega e salva configurações usando save.lua.
-Define valores padrão caso o arquivo de configuração não exista.
-🔹 save.lua
-📌 Função: Gerencia a persistência de dados do jogo usando dkjson.
+### 2. Sistema de Cutscenes (`cutscenes.lua`)
 
-Responsabilidades:
+Módulo para gerenciamento e exibição de sequências narrativas interativas.
 
-Salvar e carregar dados do progresso do jogador e das configurações.
-🔹 button.lua
-📌 Função: Define diferentes tipos de botões usados no jogo.
+#### Recursos:
+- Exibição de diálogos com efeito de digitação
+- Suporte a retratos de personagens
+- Exibição de sprites de personagens na cena
+- Suporte a escolhas e ramificações na narrativa
+- Transições com efeito de fade
+- Backgrounds para cada cena
 
-Botões Implementados:
+#### Fluxo de uma Cutscene:
+1. Carregamento dos dados da cutscene a partir de arquivo
+2. Processamento sequencial dos passos da narrativa
+3. Animação de texto e espera por input do usuário
+4. Gerenciamento de escolhas (quando aplicável)
+5. Transição para próximo passo ou finalização
 
-Seletores: Mudam de cor quando selecionados e mantêm o estado.
-Abas: Alternam entre diferentes seções do menu, resetando ao sair.
-Botões Simples: Apenas mudam de cor ao passar o mouse.
-GaleryIcons: Ícones interativos usados na Galeria de Stage Scenes.
-📌 GaleryIcons:
+### 3. Gerenciador da Galeria (`galeryManager.lua`)
 
-Mostra um ícone grande quando o mouse está sobre ele.
-Exibe o nome do item correspondente (Stage Scene, Item ou Cutscene).
-Toca a Stage Scene quando clicado.
-🔹 menu.lua
-📌 Função: Gerencia os menus do jogo.
+Interface para visualização de conteúdo desbloqueado pelo jogador.
 
-Menus Implementados:
-1️⃣ Menu Principal
+#### Categorias de Conteúdo:
+- Cenas de Fase (Stage Scenes)
+- Cutscenes
+- Itens
 
-Novo Jogo
-Galeria
-Configurações
-Sair
-2️⃣ Galeria
+#### Funcionalidades:
+- Navegação entre diferentes categorias via sistema de abas
+- Exibição de ícones clicáveis para cada item
+- Visualização de conteúdo selecionado
+- Controles para retornar à navegação da galeria
 
-Itens
-Cenas de Fase (Stage Scenes)
-Cutscenes
-Voltar
-3️⃣ Configurações
+### 4. Sistema de Menu Principal (`menu.lua`)
 
-Alternar Fullscreen
-Ajustar Volume
-Voltar
-📌 O menu controla a lógica de alternância entre menus e a navegação dentro do jogo.
+Gerencia a interface principal do jogo e navegação entre diferentes telas.
 
-🔹 stagescenes.lua
-📌 Função: Gerencia a execução das Stage Scenes carregadas a partir de arquivos individuais.
+#### Menus Implementados:
+- Menu Principal: Acesso às principais funcionalidades do jogo
+- Menu de Galeria: Visualização de conteúdo desbloqueado
+- Menu de Configurações: Ajustes de fullscreen e volume
 
-📌 Como funciona:
+#### Controle de Estado:
+- Gerenciamento do menu atual
+- Posicionamento responsivo de elementos baseado na resolução da tela
+- Manipulação de interações do usuário (mouse/teclado)
 
-Carrega os dados da Stage Scene a partir de um arquivo .lua.
-Renderiza a cena com fundo, imagens e animação de sprites.
-Atualiza a animação conforme o tempo passa.
-Permite interações de mouse (exemplo: clicar para avançar).
-🔹 SS-Mast1.lua (exemplo de Stage Scene)
-📌 Função: Define os dados de uma Stage Scene específica.
+### 5. Entrada do Programa (`main.lua`)
 
-Exemplo de estrutura:
+Ponto de entrada do aplicativo LÖVE2D, configura callbacks do framework e inicializa o jogo.
 
-lua
-Copiar
-Editar
-local stageSceneData = {
-    nome = "mast01",
-    Icone = "mast01_icon_16.png",
-    IconeLarge = "mast01_icon_32.png",
-    Efeitos = {
-        efeito1 = {
-            background = "BG1.png",
-            intro = "mast01_intro.png",
-            loopSprite = {"mast01.png", "mast02.png", "mast03.png"},
-            x = 0.4,
-            y = 0.43,
-            animationSpeed = 0.04,
-            size = 2
-        }
+#### Callbacks Implementados:
+- `love.load()`: Inicialização do jogo
+- `love.update()`: Atualização lógica por frame
+- `love.draw()`: Renderização na tela
+- `love.mousepressed()`, `love.mousereleased()`: Gerenciamento de input do mouse
+- `love.keypressed()`: Gerenciamento de input do teclado
+- `love.resize()`: Adaptação a mudanças de tamanho da janela
+
+## Fluxo de Dados e Interação entre Módulos
+
+1. `main.lua` inicializa o jogo e carrega o módulo `menu.lua`
+2. `menu.lua` gerencia a navegação entre diferentes telas:
+   - Quando o menu de galeria é selecionado, inicializa `galeryManager.lua`
+   - `galeryManager.lua` carrega os ícones para a categoria selecionada
+   - Quando um ícone é clicado, carrega o conteúdo apropriado (StageScene ou Cutscene)
+   - Para cutscenes, utiliza o módulo `cutscenes.lua` para renderizar a sequência narrativa
+
+3. Eventos de mouse e teclado são propagados da seguinte forma:
+   - `main.lua` recebe os eventos do LÖVE2D
+   - Passa para `menu.lua` que então:
+     - Propaga para componentes de UI quando no menu
+     - Propaga para `galeryManager.lua` quando na galeria
+     - `galeryManager.lua` propaga para a cutscene ativa quando visualizando conteúdo
+
+## Formato dos Arquivos de Conteúdo
+
+### Arquivo de Cutscene
+```lua
+local cutsceneData = {
+    nome = "Nome da Cutscene",       -- Nome exibido na galeria
+    IconeLarge = "caminho/icone.png", -- Ícone para a galeria
+    background = "caminho/bg.png",    -- Background inicial
+    characters = {
+        -- Definições de personagens
+    },
+    steps = {
+        -- Sequência de passos da cutscene
     }
 }
-return stageSceneData
-📌 Cada arquivo de Stage Scene pode ser carregado dinamicamente e contém informações sobre a animação.
+return cutsceneData
+```
 
-🔹 stagescenegallery.lua
-📌 Função: Exibe todas as Stage Scenes disponíveis e permite tocar cada uma delas.
+### Arquivo de Stage Scene
+Segue estrutura similar, com especificações próprias para cenas de fase.
 
-📌 Como funciona:
+## Sistema de Interação
 
-Lê a lista de Stage Scenes disponíveis.
-Cria um botão visual (GaleryIcons) para cada cena.
-Ao clicar em uma Stage Scene, ela é carregada e tocada.
-Adiciona um botão "Voltar" para retornar à galeria.
-🔄 4. Fluxo de Execução
-1️⃣ O jogo inicia em main.lua, que carrega o menu.lua.
-2️⃣ O menu principal é exibido, permitindo o jogador navegar pelas opções.
-3️⃣ Se o jogador abrir a galeria, ele pode ver Itens, Cenas de Fase e Cutscenes.
-4️⃣ Ao selecionar uma Stage Scene, ela é carregada pelo stagescenes.lua.
-5️⃣ A animação da Stage Scene é exibida com transições suaves e loop de sprites.
-6️⃣ Ao clicar em "Voltar", retorna-se à galeria.
+O jogo implementa um sistema completo de interação por mouse e teclado:
 
-🔧 5. Possíveis Melhorias e Expansões
-🔹 Melhorias no sistema de Stage Scenes:
+1. **Mouse**:
+   - Hover sobre elementos interativos (botões, ícones)
+   - Cliques para seleção e ativação
+   - Arrastar para controles deslizantes (volume)
 
-Adicionar transições mais suaves entre cenas.
-Implementar eventos interativos dentro das Stage Scenes.
-🔹 Melhorias na Galeria:
+2. **Teclado**:
+   - Navegação por cutscenes (Espaço/Enter para avançar)
+   - Escape para pular cutscenes ou retornar a menus anteriores
 
-Adicionar categorias dinâmicas para melhor organização.
-Suporte para previews antes de tocar a cena completa.
-🔹 Aprimoramento do sistema de ritmo:
+## Considerações para o Desenvolvimento Futuro
 
-Sincronização mais refinada com BPM.
-Geração procedural de padrões musicais.
-🔹 Aprimoramento do Save System:
-
-Permitir desbloqueio de Stage Scenes conforme o progresso do jogo.
-Implementar múltiplos slots de save.
-📌 Conclusão
-Este projeto já possui uma base sólida com menus interativos, um sistema de botões versátil e um player de Stage Scenes funcional. Com futuras melhorias, o jogo pode expandir sua mecânica de ritmo, aprimorar a interatividade das cenas e adicionar mais conteúdo.
-
-Se precisar de mais ajustes ou quiser aprofundar alguma parte específica, é só avisar! 🚀
+1. **Sistema de Save/Load**: Persistência de progresso do jogador
+2. **Gerenciamento de Áudio**: Implementação completa de música e efeitos sonoros
+3. **Sistema de Conquistas**: Rastreamento de objetivos e desbloqueio de conteúdo
+4. **Localização**: Suporte a múltiplos idiomas
+5. **Otimização para Mobile**: Adaptação para telas sensíveis ao toque

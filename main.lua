@@ -34,3 +34,10 @@ end
 function love.mousereleased(x, y, button)
     menu:mousereleased(x, y, button)
 end
+
+-- Adicionar suporte para eventos de teclado
+function love.keypressed(key, scancode, isrepeat)
+    if menu.keypressed then
+        menu:keypressed(key)
+    end
+end
