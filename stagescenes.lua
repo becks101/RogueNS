@@ -101,34 +101,62 @@ function StageScene:draw()
     
     local efeito = self.data.Efeitos.efeito1
     local screenWidth, screenHeight = love.graphics.getDimensions()
+    local bgWidth, bgHeight = self.background:getDimensions()
 
-    -- Desenhar fundo
-    love.graphics.draw(self.background, 0, 0, 0, 
-        screenWidth / self.background:getWidth(),
-        screenHeight / self.background:getHeight()
+    -- 1. Calcula escala do background mantendo aspect ratio
+    local bgScale = math.max(
+        screenWidth / bgWidth,
+        screenHeight / bgHeight
+    )
+    local scaledBgWidth = bgWidth * bgScale
+    local scaledBgHeight = bgHeight * bgScale
+    local bgOffsetX = (screenWidth - scaledBgWidth) / 2
+    local bgOffsetY = (screenHeight - scaledBgHeight) / 2
+
+    -- Desenha background
+    love.graphics.draw(
+        self.background,
+        bgOffsetX,
+        bgOffsetY,
+        0,
+        bgScale,
+        bgScale
     )
 
-    -- Desenhar animação atual
+    -- 2. Função para posicionamento relativo ao background
+    local function getRelativePosition(percentX, percentY)
+        return bgOffsetX + (scaledBgWidth * percentX),
+               bgOffsetY + (scaledBgHeight * percentY)
+    end
+
+    -- 3. Calcula escala dos sprites proporcional ao background
+    local baseSpriteScale = efeito.size or 1.0
+    local spriteScale = baseSpriteScale * (scaledBgWidth / bgWidth)
+
+    -- 4. Obtém posição do sprite
+    local spriteX, spriteY = getRelativePosition(efeito.x, efeito.y)
+
+    -- Desenha animação
     if self.state == "intro" then
         love.graphics.draw(
             self.introSheet,
             self.introQuads[self.currentFrame],
-            screenWidth * efeito.x,
-            screenHeight * efeito.y,
+            spriteX,
+            spriteY,
             0,
-            efeito.size,
-            efeito.size
+            spriteScale,
+            spriteScale
         )
     else
         if self.currentSpritesheet then
             love.graphics.draw(
                 self.currentSpritesheet.image,
                 self.currentSpritesheet.quads[self.currentFrame],
-                screenWidth * efeito.x,
-                screenHeight * efeito.y,
+                spriteX,
+                spriteY,
                 0,
-                efeito.size,
-                efeito.size
+                spriteScale,
+                spriteScale
             )
         end
     end
