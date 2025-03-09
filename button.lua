@@ -31,7 +31,7 @@ end
 
 -- Cores da UI
 local UIColors = {
-    default = {1, 1, 1},
+    default = {1, 0.7, 1},
     hover = {0.7, 0.7, 0.7},
     selected = {0.3, 0.6, 1}
 }
@@ -185,14 +185,59 @@ function GaleryIcons.new(x, y, imagePath, name, onClick)
     self.hoverScale = 1.1
     self.currentScale = self.normalScale
     self.hover = false
-    self.image = love.graphics.newImage(imagePath)
+    
+    -- Tenta carregar a imagem e usa uma imagem padrão se falhar
+    local success, result = pcall(function()
+        return love.graphics.newImage(imagePath)
+    end)
+    
+    if success then
+        self.image = result
+    else
+        print("Erro ao carregar imagem:", imagePath, result)
+        -- Tenta criar uma imagem em branco como fallback
+        self.image = love.graphics.newCanvas(64, 64)
+        love.graphics.setCanvas(self.image)
+        love.graphics.clear(0.5, 0.5, 0.5)
+        love.graphics.setColor(0, 0, 0)
+        love.graphics.rectangle("line", 0, 0, 64, 64)
+        love.graphics.printf("Erro", 0, 24, 64, "center")
+        love.graphics.setCanvas()
+    end
+    
     return self
+end
+function GaleryIcons:update(dt)
+    -- If there's an active click timer, update it
+    if self.clickTimer and self.clickTimer > 0 then
+        self.clickTimer = self.clickTimer - dt
+        
+        -- When timer expires, restore original scale
+        if self.clickTimer <= 0 then
+            self.currentScale = self.originalScale
+            self.clickTimer = nil
+            self.originalScale = nil
+        end
+    end
+    
+    -- Update hover state if needed
+    if self.updateHoverInUpdate then
+        local mx, my = love.mouse.getPosition()
+        self:updateHover(mx, my)
+    end
 end
 
 function GaleryIcons:updateHover(mx, my)
     local width = self.image:getWidth() * self.currentScale
     local height = self.image:getHeight() * self.currentScale
-    if mx >= self.x and mx <= self.x + width and my >= self.y and my <= self.y + height then
+    
+    -- Calcula o centro da imagem para posicionamento
+    local centerX = self.x + width / 2
+    local centerY = self.y + height / 2
+    
+    -- Verifica se o mouse está dentro da área da imagem
+    if mx >= self.x and mx <= self.x + width and 
+       my >= self.y and my <= self.y + height then
         self.hover = true
         self.currentScale = self.hoverScale
     else
@@ -203,24 +248,62 @@ end
 
 function GaleryIcons:mousepressed(x, y, button)
     if button == 1 and self.hover and self.onClick then
+        -- Add feedback visual temporarily
+        local originalScale = self.currentScale
+        self.currentScale = self.currentScale * 0.9
+        
+        -- Create a simple timer instead of using setTimeout which doesn't exist in LÖVE
+        self.clickTimer = 0.1  -- 100ms
+        self.originalScale = originalScale  -- Store the original scale
+        
+        -- Call the callback immediately
         self.onClick()
     end
 end
 
 function GaleryIcons:draw()
+    if not self.image then return end
+    
+    -- Calcula o centro da imagem para posicionamento
+    local width = self.image:getWidth() * self.currentScale
+    local height = self.image:getHeight() * self.currentScale
+    
     -- Se estiver com o mouse sobre, desenha uma sombra com pequeno offset
     if self.hover then
         love.graphics.setColor(0, 0, 0, 0.5)  -- sombra semi-transparente
         local offset = 5
-        love.graphics.draw(self.image, self.x + offset, self.y + offset, 0, self.currentScale, self.currentScale)
+        love.graphics.draw(
+            self.image, 
+            self.x + offset, 
+            self.y + offset, 
+            0, 
+            self.currentScale, 
+            self.currentScale
+        )
     end
-    love.graphics.setColor(1, 1, 1)
-    love.graphics.draw(self.image, self.x, self.y, 0, self.currentScale, self.currentScale)
+    
+    -- Desenha a imagem principal
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(
+        self.image, 
+        self.x, 
+        self.y, 
+        0, 
+        self.currentScale, 
+        self.currentScale
+    )
     
     -- Se o mouse estiver sobre, exibe o nome abaixo do ícone
     if self.hover then
         love.graphics.setColor(1, 1, 1)
-        love.graphics.print(self.name, self.x, self.y + self.image:getHeight() * self.currentScale + 2)
+        local font = love.graphics.getFont()
+        local textWidth = font:getWidth(self.name)
+        local textX = self.x + (width - textWidth) / 2
+        love.graphics.print(
+            self.name, 
+            textX, 
+            self.y + height + 5
+        )
     end
 end
 

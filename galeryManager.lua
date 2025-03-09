@@ -60,20 +60,38 @@ function GaleryManager:refreshIcons()
         -- Tenta carregar o módulo para obter os dados
         local success, itemData = pcall(require, moduleName)
         if success then
+            -- Certifique-se de que o caminho do IconeLarge existe
+            local iconPath = itemData.IconeLarge or "assets/icons/default.png"
+            
+            -- Verifica se o arquivo do ícone existe
+            local fileInfo = love.filesystem.getInfo(iconPath)
+            if not fileInfo then
+                print("Aviso: Ícone não encontrado: " .. iconPath)
+                iconPath = "assets/icons/default.png" -- Use um ícone padrão
+            end
+            
             local icon = GaleryIcons.new(
                 x, y,
-                itemData.IconeLarge,
-                itemData.nome,
+                iconPath,
+                itemData.nome or "Item sem nome",
                 function()
                     -- Callback diferente com base no tipo de conteúdo
                     if self.currentTab == "stage" then
                         self.currentScene = StageScene.new(moduleName)
                         self.sceneType = "stage"
-                        self.currentScene:load()
+                        if not self.currentScene:load() then
+                            print("Erro ao carregar stage scene:", moduleName)
+                            self.currentScene = nil
+                            self.sceneType = nil
+                        end
                     elseif self.currentTab == "cutscenes" then
                         self.currentScene = Cutscenes.new(moduleName)
                         self.sceneType = "cutscene"
-                        self.currentScene:load()
+                        if not self.currentScene:load() then
+                            print("Erro ao carregar cutscene:", moduleName)
+                            self.currentScene = nil
+                            self.sceneType = nil
+                        end
                     elseif self.currentTab == "items" then
                         -- Para itens, poderia mostrar apenas uma imagem e texto
                         -- ou implementar um visualizador de item no futuro
@@ -89,16 +107,39 @@ function GaleryManager:refreshIcons()
 end
 
 function GaleryManager:update(dt)
+    -- Update the state of hover for all icons
+    local mx, my = love.mouse.getPosition()
+    
     if self.currentScene then
-        self.currentScene:update(dt)
-        self.backButton:updateHover(love.mouse.getPosition())
+        if self.currentScene.update then
+            self.currentScene:update(dt)
+        end
+        self.backButton:updateHover(mx, my)
+    else
+        -- Update hover and timers for the icons when not viewing a scene
+        for _, icon in ipairs(self.icons) do
+            if icon.updateHover then
+                icon:updateHover(mx, my)
+            end
+            
+            -- Call the new update method to handle timers
+            if icon.update then
+                icon:update(dt)
+            end
+        end
     end
 end
-
 function GaleryManager:draw()
     if self.currentScene then
-        self.currentScene:draw()
+        if self.currentScene.draw then
+            self.currentScene:draw()
+        end
         self.backButton:draw()
+    else
+        -- Desenha os ícones da galeria
+        for _, icon in ipairs(self.icons) do
+            icon:draw()
+        end
     end
 end
 
@@ -108,14 +149,15 @@ function GaleryManager:mousepressed(x, y, button)
         self.backButton:mousepressed(x, y, button)
         
         -- Também passa o evento para a cena atual se ela precisar
-        if self.sceneType == "cutscene" then
-            -- As cutscenes precisam receber eventos de mouse para processar escolhas
+        if self.sceneType == "cutscene" and self.currentScene.mousepressed then
             self.currentScene:mousepressed(x, y, button)
         end
     else
         -- Processa cliques nos ícones da galeria
         for _, icon in ipairs(self.icons) do
-            icon:mousepressed(x, y, button)
+            if icon.mousepressed then
+                icon:mousepressed(x, y, button)
+            end
         end
     end
 end
@@ -131,7 +173,9 @@ end
 function GaleryManager:keypressed(key)
     if self.currentScene and self.sceneType == "cutscene" then
         -- As cutscenes precisam de eventos de teclado para avançar
-        self.currentScene:keypressed(key)
+        if self.currentScene.keypressed then
+            self.currentScene:keypressed(key)
+        end
     end
 end
 
