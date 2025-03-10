@@ -45,7 +45,7 @@ local corCirculoExterno = {0.5, 0.5, 0.5, 0.3} -- Cor do círculo externo
 local corCirculoOrigem = {0.3, 0.3, 0.3, 0.2}  -- Cor do círculo de origem
 local corEscudo = {1, 1, 1, 0.8}       -- Cor do escudo
 local espessuraEscudo = 3              -- Espessura da linha do escudo
-local larguraArcoEscudo = 60           -- Largura do arco do escudo em graus
+local larguraArcoEscudo = 30           -- Largura do arco do escudo em graus
 local corOnda = {1, 1, 1, 1}           -- Cor do efeito de onda
 local espessuraOnda = 2                -- Espessura da linha da onda
 local tamanhoMaximoOnda = 50           -- Tamanho máximo da onda
@@ -486,24 +486,35 @@ function gameplay.getNomeFase()
     return ""
 end
 
+function gameplay.onResize()
+    if not faseAtual then return end
+    
+    -- Recarrega a fase para recalcular todos os parâmetros baseados no novo tamanho da tela
+    gameplay.carregar(faseAtual)
+end
+
 -- Carrega uma fase
 function gameplay.carregar(fase)
     faseAtual = fase
     
-    -- Verifica se a fase tem uma configuração de distância de origem e outros parâmetros
-    if faseAtual and faseAtual.distanciaOrigem then
-        distanciaOrigem = faseAtual.distanciaOrigem
-    end
+    -- Obtém as dimensões da tela para posicionamento responsivo
+    local screenWidth, screenHeight = love.graphics.getDimensions()
     
-    if faseAtual and faseAtual.raioCentral then
-        RaioCent = faseAtual.raioCentral
-    end
+    -- Define valores padrão que funcionam bem em diferentes resoluções
+    local defaultRaioCentral = screenWidth * 0.05  -- 5% da largura da tela
+    local defaultRaioExterno = screenWidth * 0.25  -- 25% da largura da tela
+    local defaultDistanciaOrigem = screenWidth * 1.5  -- 50% da largura da tela
     
-    if faseAtual and faseAtual.raioExterno then
-        RaioExt = faseAtual.raioExterno
-    end
+    -- Posição central (por padrão é o centro da tela)
+    centroCirX = screenWidth * 0.98
+    centroCirY = screenHeight * 0.98
     
-    -- Criação dos círculos
+    -- Usa valores da fase se fornecidos, senão usa os padrões
+    RaioCent = fase.raioCentral or defaultRaioCentral
+    RaioExt = fase.raioExterno or defaultRaioExterno
+    distanciaOrigem = fase.distanciaOrigem or defaultDistanciaOrigem
+    
+    -- Criação dos círculos com os valores definidos
     circuloCentral = criarCirculo(centroCirX, centroCirY, RaioCent, corCirculoCentral)        -- Círculo central vermelho
     circuloExterno = criarCirculo(centroCirX, centroCirY, RaioExt, corCirculoExterno)         -- Círculo externo cinza
     circuloOrigem = criarCirculo(centroCirX, centroCirY, distanciaOrigem, corCirculoOrigem)   -- Círculo de origem do laser
@@ -512,7 +523,7 @@ function gameplay.carregar(fase)
     escudo = {
         x = centroCirX,
         y = centroCirY,
-        raio = RaioCent + 20,  -- O escudo é ligeiramente maior que o círculo central
+        raio = RaioCent + 60,  -- O escudo é ligeiramente maior que o círculo central
         angulo = 180, -- Inicializa em 180 graus (ajustado para o novo sistema)
         larguraArco = larguraArcoEscudo, -- Largura do arco em graus
         desenhar = function(self)
@@ -569,7 +580,6 @@ function gameplay.carregar(fase)
     atualizarPosicoes()
     trajetoriaLaser = calcularTrajetoriaLaser()
 end
-
 -- Função principal de atualização
 function gameplay.atualizar(dt, anguloEscudoInput)
     tempoDecorrido = tempoDecorrido + dt
