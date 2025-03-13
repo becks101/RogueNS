@@ -50,6 +50,26 @@ function Menu:loadMainMenu()
     }
 end
 
+function Menu:resize(w, h)
+    -- Se estiver no estado de gameplay, propaga para o Game
+    if self.currentMenu == "gameplay" and self.gameInstance then
+        self.gameInstance:resize(w, h)
+    end
+    
+    -- Redimensionamento já é tratado nos callbacks dos botões na maioria dos menus
+    -- Então apenas atualizamos os offsets quando necessário
+    
+    -- Se estiver no estado de cutscene
+    if self.currentMenu == "cutscene" and self.cutscenePlayer and self.cutscenePlayer.resize then
+        self.cutscenePlayer:resize(w, h)
+    end
+    
+    -- Se estiver no estado de galeria
+    if self.currentMenu == "gallery" and self.galleryPlayer and self.galleryPlayer.resize then
+        self.galleryPlayer:resize(w, h)
+    end
+end
+
 function Menu:loadGalleryMenu()
     self.currentMenu = "gallery"
     -- Usa o novo GaleryManager em vez de stagescenegallery

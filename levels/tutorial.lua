@@ -1,77 +1,43 @@
--- ExemploDeFase01.lua
--- Exemplo de fase para o jogo de ritmo
+-- tutorial.lua
+-- Fase tutorial para o jogo de ritmo no novo sistema
 
 local fase = {
     nome = "Tutorial 01",
-    bpm = 90,
-    duracao = 50,
+    bpm = 75,      -- Define a velocidade base (beats per minute) mais lenta para tutorial
+    duracao = 60,  -- Duração da fase em segundos
+    fase_seed = 98765432,  -- Seed usada para geração de padrões
     
-    -- Lista de ângulos que serão usados (em graus)
-    angs = {
-        A = 180,   -- Direita
-        B = 195,   -- Direita-cima
-        C = 210,  -- Direita-baixo
-        D = 225,    -- Cima
-        E = 240,  -- Baixo
-        F = 255,    -- Cima
-        G = 270,  -- Esquerda (para origem)
+    -- Parâmetros específicos do novo sistema
+    velocidade = 150,  -- Velocidade de queda dos blocos (mais lento para tutorial)
+    intervalo = 1.2,   -- Intervalo entre blocos maior para iniciantes
+    dificuldade = 1,   -- Nível de dificuldade
+    
+    -- Cores customizadas mais vivas para o tutorial
+    cores = {
+        {1.0, 0.7, 0.9},  -- Rosa mais brilhante
+        {0.7, 1.0, 0.8},  -- Verde mais vivo
+        {0.7, 0.8, 1.0},  -- Azul mais claro
+        {1.0, 0.9, 0.7}   -- Amarelo mais brilhante
     },
     
-    -- Ângulos da tangente por tempo (controla a rota do laser)
-    tangAng = {
-        "A", "A", "A", "C", "C", 
-        "C", "A", "A", "A", "A", 
-        "C", "C", "C", "C", "C", 
-        "B", "B", "B", "B", "B"
-    },
-    
-    -- Ângulos da origem por tempo
-    originAng = {
-        "G", "F", "G", "E", "G", 
-        "A", "G", "F", "A", "G", 
-        "E", "G", "F", "G", "E", 
-        "A", "F", "G", "A", "G"
-    },
-    
-    -- Sequência de beats (n = normal, c = contínuo)
-    beats = {
-        "n", "n", "n", "c", "c", 
-        "c", "n", "c", "c", "c", 
-        "n", "c", "c", "c", "n", 
-        "c", "c", "c", "n", "n"
-    },
+    -- Animação inicial do tutorial
     animation = "stages/ss_mast01",
     
-    -- Novo: lista de achievements possíveis
+    -- Achievements do tutorial (mais fáceis)
     achievements = {
         {
-            id = "Nível 2",
-            condition = "combo_maximo",
-            value = 5,
-            reward_type = "fase",
-            reward_value = "nivel2",
-        },
-        {
-            id = "mast_branch02",
-            condition = "combo_maximo",
-            value = 5,
-            reward_type = "stage_scene",
-            reward_value = "mast_branch02",
-            real_time_check = true
-        },
-        {
-            id = "Introdução",
+            id = "Tutorial Completo",
             condition = "musica_terminada",
             value = true,
-            reward_type = "cutscene",
-            reward_value = "cutscenes/intro",
+            reward_type = "fase",
+            reward_value = "exemploDeFase01",
         },
         {
-            id = "Pontuação Alta",
+            id = "Primeiros Passos",
             condition = "pontuacao_minima",
-            value = 1000,
+            value = 50,
             reward_type = "cutscene",
-            reward_value = "cutscenes/high_score",
+            reward_value = "cutscenes/chapter1",
         }
     }
 }

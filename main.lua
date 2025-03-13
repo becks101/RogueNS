@@ -1,5 +1,4 @@
--- main.lua com suporte a posicionamento personalizado
-
+-- main.lua
 local Config = require "config"
 local Menu = require "menu"
 
@@ -29,7 +28,7 @@ function love.load()
     
     -- Centraliza a janela
     local screenWidth, screenHeight = love.window.getDesktopDimensions()
-    local windowWidth, windowHeight = 800, 600
+    local windowWidth, windowHeight = 1024, 768
     
     -- Define configurações iniciais da janela
     love.window.setMode(windowWidth, windowHeight, {
@@ -50,13 +49,6 @@ function love.load()
     
     -- Cria a instância do menu
     menu = Menu.new()
-    
-    -- Inicializa o gameplay com as dimensões da tela
-    local gameplay = require "gameplay"
-    gameplay.setCentro(windowWidth / 2, windowHeight / 2)  -- Posição inicial centralizada
-    gameplay.setRaioCentral(40)
-    gameplay.setRaioExterno(200)
-    gameplay.setDistanciaOrigem(400)
 end
 
 -- Função para definir a posição dos círculos para o jogo

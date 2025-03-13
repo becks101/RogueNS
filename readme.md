@@ -1,8 +1,8 @@
-# Documentação Completa do Jogo Rhythm Shield
+# Documentação Completa do Jogo Rhythm Game
 
 ## Visão Geral
 
-Rhythm Shield é um jogo musical desenvolvido em Lua usando o framework LÖVE2D. O jogador deve posicionar um escudo para proteger um círculo central de lasers que seguem o ritmo da música. Com uma arquitetura modular, o jogo implementa funcionalidades como sistema de menus, cutscenes narrativas, galeria de conteúdo, e um sistema central de gameplay baseado em ritmo.
+Rhythm Game é um jogo musical desenvolvido em Lua usando o framework LÖVE2D. O jogador controla um círculo que deve capturar blocos coloridos que caem em trilhas ao ritmo da música. O jogo conta com uma arquitetura modular, implementando funcionalidades como sistema de menus, cutscenes narrativas, galeria de conteúdo, e um sistema de gameplay baseado em ritmo.
 
 ## Estrutura de Diretórios
 
@@ -51,7 +51,6 @@ O ponto de entrada da aplicação, configura callbacks do framework LÖVE2D e in
 - `love.update(dt)`: Atualiza o jogo frame a frame.
 - `love.draw()`: Renderiza os elementos na tela.
 - `love.resize(w, h)`: Adapta o jogo a mudanças no tamanho da janela.
-- `love.setGameCirclePosition(ratioX, ratioY)`: Define a posição relativa dos círculos de gameplay.
 
 ### 2. `menu.lua`
 
@@ -69,33 +68,30 @@ Gerencia a navegação entre os diferentes estados e menus do jogo.
 
 ### 3. `game.lua`
 
-Gerencia o estado de jogo e a lógica de gameplay.
+Gerencia o estado de jogo e a lógica de nível.
 
 **Funções Principais:**
 - `Game.new()`: Cria uma nova instância do gerenciador de jogo.
 - `Game:loadLevel(levelModule)`: Carrega uma fase a partir de seu módulo.
-- `Game:setCirclePosition(ratioX, ratioY)`: Define posição dos círculos do jogo.
-- `Game:updateGameplayDimensions()`: Ajusta dimensões do gameplay baseado na tela.
 - `Game:update(dt)`: Atualiza o estado do jogo.
-- `Game:draw()`: Renderiza o jogo.
-- `Game:keypressed(key)`: Processa entrada do teclado.
-- `Game:pause()` e `Game:resume()`: Gerencia pausas do jogo.
+- `Game:draw()`: Renderiza o jogo com stage scene e gameplay.
+- `Game:keypressed(key)`: Processa entrada do teclado para o jogo.
 - `Game:resize(w, h)`: Adapta o jogo a mudanças no tamanho da janela.
+- `Game.newLevelCreator()`: Cria um gerador de níveis.
+- `Game.newPhaseGenerator()`: Cria um gerador de fases com seeds.
+- `Game.formatSeed()`: Formata uma seed para apresentação visual.
 
-### 4. `gameplay.lua`
+### 4. `gameplay.lua` (Atualizado)
 
-Implementa a mecânica central do jogo de ritmo.
+Implementa a mecânica central do jogo de ritmo com blocos que caem em trilhas.
 
 **Funções Principais:**
+- `gameplay.setDimensoes(width, height)`: Define as dimensões da área de gameplay.
+- `gameplay.setOffset(x, y)`: Posiciona a área de gameplay na tela.
 - `gameplay.carregar(fase)`: Carrega uma fase no sistema de gameplay.
 - `gameplay.atualizar(dt, anguloEscudoInput)`: Atualiza o estado do gameplay.
-- `gameplay.desenhar(desenharUI)`: Renderiza o gameplay.
-- `gameplay.setCentro(x, y)`: Define o centro dos círculos.
-- `gameplay.setRaioCentral(raio)`: Define o raio do círculo central.
-- `gameplay.setRaioExterno(raio)`: Define o raio do círculo externo.
-- `gameplay.setDistanciaOrigem(dist)`: Define a distância da origem do laser.
-- `gameplay.setForcaGravitacional(forca)`: Define a força gravitacional.
-- `gameplay.setVelocidadeLaser(velocidade)`: Define a velocidade do laser.
+- `gameplay.desenhar(desenharUI)`: Renderiza o gameplay com trilhas, blocos e jogador.
+- `gameplay.keypressed(key)`: Processa entrada de teclado para movimentação.
 - `gameplay.getPontuacao()`: Obtém a pontuação atual.
 - `gameplay.getCombo()`: Obtém o combo atual.
 - `gameplay.getMultiplicador()`: Obtém o multiplicador atual.
@@ -125,13 +121,6 @@ Implementa os componentes de UI usados em todo o jogo.
 - `VolumeSlider`: Controle deslizante para ajuste de volume.
 - `GaleryIcons`: Ícones interativos para a galeria.
 
-**Métodos Comuns:**
-- `new(...)`: Cria uma nova instância do elemento.
-- `updateHover(mx, my)`: Verifica se o mouse está sobre o elemento.
-- `draw()`: Renderiza o elemento.
-- `mousepressed(x, y, button)`: Processa cliques no elemento.
-- `mousereleased(x, y, button)`: Processa soltura do botão do mouse (para sliders).
-
 ### 7. `galeryManager.lua`
 
 Sistema para visualização de conteúdo desbloqueado pelo jogador.
@@ -144,18 +133,7 @@ Sistema para visualização de conteúdo desbloqueado pelo jogador.
 - `GaleryManager:mousepressed(x, y, button)`: Processa interações do mouse.
 - `GaleryManager:keypressed(key)`: Processa entrada do teclado.
 
-### 8. `stagescenes.lua`
-
-Sistema para exibir cenas especiais relacionadas às fases.
-
-**Funções Principais:**
-- `StageScene.new(stageSceneModule)`: Cria nova instância de cena de fase.
-- `StageScene:load()`: Carrega os recursos da cena.
-- `StageScene:update(dt)`: Atualiza as animações da cena.
-- `StageScene:draw()`: Renderiza a cena.
-- `StageScene:selectRandomSpritesheet()`: Seleciona uma spritesheet aleatória para animação.
-
-### 9. `flagsSystem.lua`
+### 8. `flagsSystem.lua`
 
 Sistema para gerenciar flags, achievements e recompensas.
 
@@ -169,30 +147,57 @@ Sistema para gerenciar flags, achievements e recompensas.
 - `FlagsSystem.loadState()`: Carrega o estado salvo.
 - `FlagsSystem.setFlag(flagName, value)`: Define uma flag.
 - `FlagsSystem.getFlag(flagName)`: Obtém o valor de uma flag.
-- `FlagsSystem.addItem(itemId, quantidade)`: Adiciona um item à coleção do jogador.
-- `FlagsSystem.hasItem(itemId, quantidade)`: Verifica se o jogador tem um item.
 
-### 10. `config.lua`
+## Novo Sistema de Gameplay (Atualizado)
 
-Gerencia as configurações do jogo.
+O sistema de gameplay foi completamente reformulado, substituindo o anterior baseado em escudo e lasers por um novo baseado em trilhas e blocos:
 
-**Funções Principais:**
-- `Config.setFullscreen(value)`: Define modo tela cheia.
-- `Config.setVolume(value)`: Define volume do jogo.
-- `Config.load()`: Carrega configurações salvas.
+### Mecânica Principal
 
-### 11. `save.lua`
+1. **Estrutura Visual:**
+   - O gameplay é exibido como um painel semitransparente à direita da tela
+   - A área de gameplay tem largura fixa entre 160-200 pixels, com altura proporcional
+   - A stage scene é mostrada em tela completa como plano de fundo
+   - O gameplay funciona como um overlay sobre a stage scene
 
-Sistema para salvar e carregar dados do jogo.
+2. **Elementos do Jogo:**
+   - **Trilhas**: 4 caminhos verticais por onde os blocos caem
+   - **Blocos**: Quadrados coloridos que caem nas trilhas em ritmo sincronizado com a música
+   - **Jogador**: Círculo que se move entre as trilhas para capturar os blocos
+   - **Pontuação**: Sistema de pontos baseado em acertos
 
-**Funções Principais:**
-- `Save.saveConfig(config)`: Salva configurações do jogo.
-- `Save.loadConfig()`: Carrega configurações salvas.
-- `Save.saveFlags(flagsData)`: Salva o estado de flags e achievements.
-- `Save.loadFlags()`: Carrega o estado de flags e achievements.
-- `Save.saveGameProgress(data)`: Salva progresso completo do jogo.
-- `Save.loadGameProgress()`: Carrega progresso completo do jogo.
-- `Save.clearAllData()`: Apaga todos os dados salvos.
+3. **Controles:**
+   - **Seta Esquerda**: Move o jogador para a trilha à esquerda
+   - **Seta Direita**: Move o jogador para a trilha à direita
+
+4. **Geração de Fases:**
+   - Sistema de seed para geração procedural de fases
+   - Cada fase tem um BPM (batidas por minuto) que determina a velocidade dos blocos
+   - Configurações de dificuldade, velocidade e intervalo de blocos ajustáveis
+
+5. **Adaptação a Diferentes Telas:**
+   - Sistema de posicionamento absoluto em pixels para consistência visual
+   - Funciona corretamente tanto em modo janela quanto em fullscreen
+   - Cálculos de posição e tamanho arredondados para evitar problemas visuais
+
+### Implementação Técnica
+
+1. **Posicionamento:**
+   - Área de gameplay sempre à direita da tela, com distância fixa da borda
+   - Trilhas igualmente espaçadas dentro da área de gameplay
+   - Blocos sempre centrados em suas trilhas
+   - Jogador posicionado próximo ao fundo da área, com altura fixa
+
+2. **Renderização:**
+   - Fundo semitransparente com cantos arredondados
+   - Trilhas com cores diferentes para a trilha ativa (onde está o jogador)
+   - Blocos com cores diferentes e efeitos visuais (sombras, brilhos, cantos arredondados)
+   - Interface do usuário mostrando pontuação e nível atual
+
+3. **Colisões:**
+   - Sistema de colisão entre o jogador (círculo) e os blocos (retângulos)
+   - Quando há colisão, o bloco é removido e o jogador ganha pontos
+   - Blocos que saem da tela sem serem capturados são removidos sem pontuação
 
 ## Estrutura de Arquivos de Dados
 
@@ -203,20 +208,20 @@ local fase = {
     nome = "Nome da Fase",
     bpm = 90,               -- Batidas por minuto
     duracao = 60,           -- Duração em segundos
+    fase_seed = 13312212,   -- Seed para geração procedural
     
-    -- Definição dos ângulos
-    angs = {
-        A = 180, B = 195, C = 210, ...
+    -- Parâmetros específicos de gameplay
+    velocidade = 180,       -- Velocidade de queda dos blocos
+    intervalo = 0.7,        -- Intervalo entre blocos em segundos
+    dificuldade = 1,        -- Nível de dificuldade
+    
+    -- Cores customizadas (opcional)
+    cores = {
+        {0.92, 0.7, 0.85},  -- Rosa pastel
+        {0.7, 0.9, 0.8},    -- Verde mint
+        {0.7, 0.8, 0.95},   -- Azul céu
+        {0.97, 0.9, 0.7}    -- Amarelo pastel
     },
-    
-    -- Ângulos de alvo do laser
-    tangAng = { "A", "B", "C", ... },
-    
-    -- Ângulos de origem do laser
-    originAng = { "G", "F", "G", ... },
-    
-    -- Sequência de beats
-    beats = { "n", "c", "n", ... },
     
     -- Stage scene para introdução
     animation = "stages/nome_da_animacao",
@@ -230,7 +235,7 @@ local fase = {
             reward_type = "fase",
             reward_value = "proxima_fase"
         },
-        ...
+        -- Mais achievements...
     }
 }
 ```
@@ -249,7 +254,7 @@ local cutsceneData = {
             name = "Nome Exibido",
             portrait = "assets/portraits/retrato.png"
         },
-        ...
+        -- Mais personagens...
     },
     
     -- Passos da cutscene
@@ -264,50 +269,10 @@ local cutsceneData = {
                     y = 0.5,    -- Posição vertical relativa
                     scale = 1.0 -- Escala
                 },
-                ...
+                -- Mais sprites...
             }
         },
-        
-        -- Passo com escolhas
-        {
-            text = "Escolha uma opção:",
-            speaker = "personagem1",
-            choices = {
-                {
-                    text = "Opção 1",
-                    action = "startLevel",
-                    levelPath = "levels/fase1",
-                    nextStep = 7
-                },
-                ...
-            }
-        },
-        ...
-    }
-}
-```
-
-### 3. Formato de Arquivo de Stage Scene (stages/...)
-
-```lua
-local stageSceneData = {
-    nome = "Nome da Stage Scene",
-    IconeLarge = "assets/icons/icone.png",
-    
-    -- Efeitos visuais
-    Efeitos = {
-        efeito1 = {
-            background = "assets/backgrounds/fundo.png",
-            intro = "assets/sprites/intro_spritesheet.png",
-            loopSprite = {
-                "assets/sprites/loop1.png",
-                "assets/sprites/loop2.png"
-            },
-            x = 0.5,              -- Posição horizontal relativa
-            y = 0.5,              -- Posição vertical relativa
-            size = 1.0,           -- Escala
-            animationSpeed = 0.05 -- Velocidade da animação
-        }
+        -- Mais passos...
     }
 }
 ```
@@ -331,15 +296,14 @@ local stageSceneData = {
 
 4. **Carregamento de Fase**:
    - Menu cria instância de `Game` com `Game.new()`
-   - Define posição dos círculos com `Game:setCirclePosition()`
    - Carrega nível com `Game:loadLevel(levelPath)`
    - Inicia fase com animação se especificada
 
 5. **Gameplay**:
-   - Jogador controla o escudo para desviar lasers
-   - `Game:update()` atualiza o jogo com entrada do jogador
+   - Jogador controla o círculo para capturar blocos
+   - `Game:update()` atualiza a cena com entrada do jogador
    - `FlagsSystem` monitora condições para achievements
-   - `Gameplay` gerencia a lógica da fase
+   - `Gameplay` gerencia a lógica dos blocos, trilhas e colisões
 
 6. **Conclusão de Fase**:
    - Ao completar fase, `Gameplay` retorna "fase_concluida"
@@ -349,49 +313,13 @@ local stageSceneData = {
 ## Sistema de Interação
 
 ### Controles Padrão
-- **Setas Esquerda/Direita**: Movem o escudo durante o gameplay
+- **Setas Esquerda/Direita**: Movem o jogador entre as trilhas
 - **Espaço/Enter**: Avança o diálogo em cutscenes
 - **Mouse**: Seleciona opções nos menus e cutscenes
 - **Escape**: Sai da fase atual para o menu principal
 - **Alt+Enter/F11**: Alterna modo tela cheia
 
-### Fluxo de Eventos de Input
-1. `main.lua` recebe eventos do LÖVE2D
-2. Eventos são enviados para módulo apropriado:
-   - Para `menu.lua` quando no menu
-   - Para `cutscenes.lua` quando em cutscene
-   - Para `game.lua` quando em gameplay
-
-### Sistema de UI
-Todos os elementos de UI são implementados em `button.lua` e seguem processo de interação:
-1. Detecção de hover com `updateHover(mx, my)`
-2. Processamento de clique com `mousepressed(x, y, button)`
-3. Execução de callback de interação
-4. Renderização com `draw()`
-
-## Considerações Técnicas
-
-### Sistema de Suavização de Movimento
-- Implementado no módulo `gameplay.lua`
-- Utiliza interpolação linear para suavizar transições entre ângulos
-- Emprega sistema de previsão para iniciar transições antes das batidas
-
-### Sistema de Trajetória do Laser
-- Simula campo gravitacional para criar trajetórias curvas
-- Implementa física de partículas para renderizar o laser em tempo real
-- Detecta colisões precisas para verificar acertos do jogador
-
-### Dimensionamento e Posicionamento Responsivo
-- Todo o jogo adapta-se a diferentes tamanhos de tela
-- Utiliza posicionamento relativo (0.0 a 1.0) para escalabilidade
-- Recalcula dimensões e posições durante redimensionamento
-
-### Tratamento de Erros UTF-8
-- Implementa `pcall()` para capturar erros de decodificação UTF-8
-- Fornece fallbacks seguros para cálculos de largura de texto
-- Sanitiza textos para evitar problemas de renderização
-
-## Progressão de Jogo e Desbloqueio de Conteúdo
+## Progressão de Jogo
 
 O jogo implementa um sistema de progressão completo através do `flagsSystem.lua`:
 
@@ -405,66 +333,12 @@ O jogo implementa um sistema de progressão completo através do `flagsSystem.lu
 2. **Persistência de Dados**:
    - Utiliza `save.lua` para salvar progresso
    - Armazena configurações, flags, achievements e itens coletados
-   - Implementa formato JSON para armazenamento
 
-3. **Acesso a Conteúdo Desbloqueado**:
-   - Galeria exibe conteúdo desbloqueado por categoria
-   - Menu principal habilita acesso a novas fases
-   - Cutscenes podem ser revistas após desbloqueio
+3. **Sistema de Seed**:
+   - Fases são geradas proceduralmente com base em seeds
+   - Cada fase tem uma seed única que determina o padrão de blocos
+   - Uma "run seed" global pode ser combinada com a seed da fase para criar variações
 
-## Error Handling & Resource Management
+## Conclusão
 
-The game implements comprehensive error handling to ensure stability even when resource files are missing or corrupted:
-
-### Robust Resource Loading
-
-- **Image Loading**: All image loading operations use `pcall()` to catch errors from missing or corrupted files
-- **Fallback Resources**: Default placeholder images are generated when requested resources cannot be loaded
-- **Visual Error Indicators**: When resources fail to load, visual indicators are shown instead of crashing
-- **Defensive Programming**: All methods validate their inputs and check for nil values before attempting operations
-
-### Error Recovery Mechanisms
-
-- **StageScene Resilience**: The StageScene system can operate even with partially loaded resources
-- **Gallery Error Prevention**: The GaleryManager prevents cascading failures when individual items fail to load
-- **UI Element Timers**: UI interactions use frame-based timers instead of callbacks to avoid timing-related errors
-
-### Debugging Assistance
-
-- **Descriptive Error Messages**: Detailed error messages are logged to the console to facilitate debugging
-- **Error Visualization**: Visual indicators show where resources failed to load
-- **Graceful Degradation**: Features degrade gracefully rather than crashing when resources are unavailable
-
-### Asset Management Recommendations
-
-- Always place assets in the proper directories: `assets/backgrounds/`, `assets/sprites/`, etc.
-- Use the provided fallback mechanisms when creating new content modules
-- Test your additions with the `-debug` flag to see detailed resource loading information
-
-## Expansão do Jogo
-
-Para continuar o desenvolvimento, considere as seguintes melhorias:
-
-1. **Sistema de Áudio**:
-   - Implementar reprodução de música sincronizada com o gameplay
-   - Adicionar efeitos sonoros para feedback ao jogador
-   - Implementar sistema de mixagem para balancear volume
-
-2. **Interface do Usuário Avançada**:
-   - Adicionar efeitos visuais e transições entre menus
-   - Implementar telas de pausa e configurações dentro do jogo
-   - Adicionar gráficos de desempenho e estatísticas do jogador
-
-3. **Conteúdo Adicional**:
-   - Implementar mais fases com diferentes padrões rítmicos
-   - Expandir a narrativa com novas cutscenes e personagens
-   - Adicionar novos elementos de gameplay como power-ups
-
-4. **Otimizações**:
-   - Implementar carregamento assíncrono para recursos grandes
-   - Otimizar renderização para melhor desempenho em dispositivos de baixo poder
-   - Aprimorar o gerenciamento de memória para cenas complexas
-
----
-
-Esta documentação reflete o estado atual do jogo Rhythm Shield. À medida que novas funcionalidades forem implementadas, a documentação deverá ser atualizada para manter-se como referência completa e atual do projeto.
+Esta documentação reflete o estado atual do jogo Rhythm Game, incluindo o novo sistema de gameplay baseado em trilhas e blocos que substituiu o antigo sistema de escudo e lasers. O jogo mantém sua arquitetura modular e extensibilidade, permitindo adicionar facilmente novas fases, cutscenes e conteúdo para a galeria.

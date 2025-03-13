@@ -1,30 +1,24 @@
 -- ExemploDeFase01.lua
--- Exemplo de fase para o jogo de ritmo
+-- Exemplo de fase para o jogo de ritmo no novo sistema
 
 local fase = {
     nome = "Tutorial 01",
-    bpm = 90,
-    duracao = 50,
+    bpm = 90,      -- Define a velocidade base (beats per minute)
+    duracao = 50,  -- Duração da fase em segundos
+    fase_seed = 13312212,  -- Seed usada para geração de padrões
     
-    -- Lista de ângulos que serão usados (em graus)
-    angs = {
-        A = 180,   -- Direita
-        B = 195,   -- Direita-cima
-        C = 210,  -- Direita-baixo
-        D = 225,    -- Cima
-        E = 240,  -- Baixo
-        F = 255,    -- Cima
-        G = 270,  -- Esquerda (para origem)
+    -- Parâmetros específicos do novo sistema
+    velocidade = 180,  -- Velocidade de queda dos blocos
+    intervalo = 0.7,   -- Intervalo entre blocos em segundos
+    dificuldade = 1,   -- Nível de dificuldade
+    
+    -- Cores customizadas (opcional)
+    cores = {
+        {0.92, 0.7, 0.85},  -- Rosa pastel suave
+        {0.7, 0.9, 0.8},    -- Verde mint pastel
+        {0.7, 0.8, 0.95},   -- Azul céu pastel
+        {0.97, 0.9, 0.7}    -- Amarelo pastel suave
     },
-    
-    -- Sequência de beats mais simples e padronizada
-    beats = {"n", "n", "c", "c", "c", "c", "n", "n"},
-    
-    -- Ângulos alternando apenas entre poucos valores para facilitar
-    tangAng = {"G", "G", "G", "G", "G", "G", "G", "G"},
-    
-    -- Ângulos de origem simples
-    originAng = {"A", "C", "E", "G", "E", "C", "A", "C"},
     
     -- Animação inicial do tutorial
     animation = "stages/ss_mast01",
