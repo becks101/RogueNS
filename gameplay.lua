@@ -1,114 +1,197 @@
 -- gameplay.lua
--- Módulo que contém toda a lógica do jogo de ritmo
+--[[
+    Module that contains all rhythm game logic.
+    
+    This module implements a rhythm game where colored blocks fall along tracks
+    and the player must move to capture them.
+    
+    The game uses a fixed-position layout with the gameplay area positioned
+    on the right side of the screen.
+]]
+
+local ScreenUtils = require "screen_utils"
 
 local gameplay = {}
 
--- Variáveis locais do gameplay
-local larguraTela, alturaTela
-local jogador
-local levelCreator, phaseGenerator
-local nivel
-local blocos = {}
-local pontos = 0
-local tempoUltimoBloco = 0
-local offsetX = 0
-local offsetY = 0 -- Offset para posicionamento na tela
+--------------------------
+-- PRIVATE VARIABLES
+--------------------------
 
--- Funções auxiliares
--------------------------
--- Cria um novo bloco baseado nas configurações do nível atual
-local function criarBlocoDoNivel()
-    local posicaoIndex = math.random(1, 4)
-    local corIndex = math.random(1, 4)
+-- Game dimensions and positioning
+local gameWidthPercent = 0.15  -- Percentage of screen width
+local minGameWidth = 160       -- Minimum width in pixels
+local maxGameWidth = 200       -- Maximum width in pixels
+local gameMargin = 20          -- Margin from screen edge
+local gameWidth, gameHeight = 0, 0
+local offsetX, offsetY = 0, 0
+
+-- Game state
+local player = nil
+local blocks = {}
+local level = nil
+local points = 0
+local timeSinceLastBlock = 0
+
+-- Reference to external modules (lazy-loaded when needed)
+local levelCreator, phaseGenerator = nil, nil
+
+--------------------------
+-- PRIVATE HELPER FUNCTIONS
+--------------------------
+
+-- Recalculates game dimensions based on screen size
+local function recalculateDimensions()
+    -- Calculate proportional width with limits
+    gameWidth = math.max(minGameWidth, math.min(ScreenUtils.width * gameWidthPercent, maxGameWidth))
     
-    -- Tamanho fixo dos blocos para consistência visual
-    local tamanhoMin = 12
-    local tamanhoBloco = math.max(tamanhoMin, math.floor(larguraTela / 16))
+    -- Keep gameHeight nearly full height with margin
+    gameHeight = ScreenUtils.height - gameMargin * 2
     
-    local bloco = {
-        x = nivel.posicoesX[posicaoIndex],
-        y = -tamanhoBloco,  -- Começa acima da tela com base no próprio tamanho
-        largura = tamanhoBloco,
-        altura = tamanhoBloco,
-        cor = nivel.cores[corIndex],
-        posicaoIndex = posicaoIndex, -- Armazena a posição para facilitar as colisões
-        raioCantos = math.floor(tamanhoBloco * 0.2) -- Raio dos cantos arredondados (20% do tamanho)
+    -- Position at the right side of screen with margin
+    offsetX = ScreenUtils.width - gameWidth - gameMargin
+    offsetY = gameMargin
+    
+    -- Update player positions if player exists
+    if player then
+        -- Recalculate track positions
+        local numPositions = 4
+        local spacing = math.floor(gameWidth / 5)
+        
+        player.posicoesJogador = {}
+        for i = 1, numPositions do
+            player.posicoesJogador[i] = math.floor(i * spacing)
+        end
+        
+        -- Update current position
+        player.x = player.posicoesJogador[player.posicaoAtual]
+        
+        -- Update player radius for visual consistency
+        player.raio = math.max(8, math.floor(gameWidth / 20))
+    end
+    
+    -- Update level track positions if level exists
+    if level and level.posicoesX then
+        local numPositions = 4
+        local spacing = math.floor(gameWidth / 5)
+        
+        level.posicoesX = {}
+        for i = 1, numPositions do
+            level.posicoesX[i] = math.floor(i * spacing)
+        end
+    end
+end
+
+-- Creates a new block based on current level configuration
+local function createBlock()
+    if not level then return nil end
+
+    local positionIndex = math.random(1, 4)
+    local colorIndex = math.random(1, 4)
+    
+    -- Fixed block size for visual consistency
+    local minSize = 12
+    local blockSize = math.max(minSize, math.floor(gameWidth / 16))
+    
+    local block = {
+        x = level.posicoesX[positionIndex],
+        y = -blockSize,  -- Start above the screen
+        width = blockSize,
+        height = blockSize,
+        color = level.cores[colorIndex],
+        positionIndex = positionIndex,
+        cornerRadius = math.floor(blockSize * 0.2) -- 20% of block size
     }
     
-    table.insert(blocos, bloco)
+    table.insert(blocks, block)
+    return block
 end
 
--- Verifica colisão entre círculo e retângulo
-local function verificarColisao(bloco, jogadorObj)
-    -- Encontrar o ponto mais próximo do retângulo ao círculo
-    local pontoMaisProximoX = math.max(bloco.x - bloco.largura/2, 
-                                      math.min(jogadorObj.x, bloco.x + bloco.largura/2))
-    local pontoMaisProximoY = math.max(bloco.y - bloco.altura/2, 
-                                      math.min(jogadorObj.y, bloco.y + bloco.altura/2))
+-- Checks collision between a block and the player
+local function checkCollision(block, playerObj)
+    if not block or not playerObj then return false end
     
-    -- Calcular a distância entre o ponto mais próximo e o centro do círculo
-    local distanciaX = pontoMaisProximoX - jogadorObj.x
-    local distanciaY = pontoMaisProximoY - jogadorObj.y
-    local distanciaQuadrada = distanciaX * distanciaX + distanciaY * distanciaY
+    -- Find the closest point on the rectangle to the circle
+    local closestX = math.max(block.x - block.width/2, 
+                             math.min(playerObj.x, block.x + block.width/2))
+    local closestY = math.max(block.y - block.height/2, 
+                             math.min(playerObj.y, block.y + block.height/2))
     
-    -- Verificar se a distância é menor que o raio do círculo
-    return distanciaQuadrada <= (jogadorObj.raio * jogadorObj.raio)
+    -- Calculate distance between closest point and circle center
+    local distX = closestX - playerObj.x
+    local distY = closestY - playerObj.y
+    local distSquared = distX * distX + distY * distY
+    
+    -- Check if distance is less than circle radius
+    return distSquared <= (playerObj.raio * playerObj.raio)
 end
 
--- API Pública do módulo
--------------------------
+-- Initialize player with calculated positions
+local function initializePlayer()
+    if not gameWidth or not gameHeight then return nil end
+    
+    -- Fixed player size for consistency
+    local playerRadius = math.max(8, math.floor(gameWidth / 20))
+    
+    -- Fixed Y position from bottom
+    local posY = gameHeight - 40
+    
+    local player = {
+        posicaoAtual = 2, -- Start at position 2 (of 1-4)
+        posicoesJogador = {},
+        x = 0, -- Will be set after calculating positions
+        y = posY,
+        raio = playerRadius,
+        cor = {0.9, 0.85, 0.95} -- Light pastel pink
+    }
+    
+    -- Calculate player positions
+    local numPositions = 4
+    local spacing = math.floor(gameWidth / 5)
+    
+    for i = 1, numPositions do
+        player.posicoesJogador[i] = math.floor(i * spacing)
+    end
+    
+    -- Set initial X position
+    player.x = player.posicoesJogador[player.posicaoAtual]
+    
+    return player
+end
 
--- Define o offset (posição) do gameplay na tela
+-- Calculate track positions
+local function calculateTrackPositions()
+    if not level or not gameWidth then return end
+    
+    local numPositions = 4
+    local spacing = math.floor(gameWidth / 5)
+    
+    level.posicoesX = {}
+    for i = 1, numPositions do
+        level.posicoesX[i] = math.floor(i * spacing)
+    end
+end
+
+--------------------------
+-- PUBLIC API
+--------------------------
+
+-- Sets the offset (position) of the gameplay area on the screen
 function gameplay.setOffset(x, y)
-    offsetX = x
-    offsetY = y
+    offsetX = x or 0
+    offsetY = y or 0
 end
 
--- Define o tamanho e dimensões da área de gameplay
+-- Sets the dimensions of the gameplay area and recalculates layout
 function gameplay.setDimensoes(width, height)
-    larguraTela = width
-    alturaTela = height
-    
-    -- Se o jogador já existe, atualiza suas posições
-    if jogador then
-        -- Usa valores fixos de pixel para garantir consistência
-        local numPositions = 4  -- Número de posições
-        
-        -- Calcula espaçamento entre as trilhas
-        local spacing = math.floor(larguraTela / 5)
-        
-        -- Recria array de posições
-        jogador.posicoesJogador = {}
-        
-        -- Distribuição uniforme das posições
-        for i = 1, numPositions do
-            jogador.posicoesJogador[i] = math.floor(i * spacing)
-        end
-        
-        -- Ajusta posição X atual do jogador
-        jogador.x = jogador.posicoesJogador[jogador.posicaoAtual]
-        
-        -- Define Y a uma distância fixa do fundo
-        jogador.y = alturaTela - 40
-        
-        -- Ajusta raio para garantir tamanho visual consistente
-        jogador.raio = math.max(8, math.floor(larguraTela / 20))
-    end
-    
-    -- Se o nível existir, atualiza as posições dos blocos
-    if nivel and nivel.posicoesX then
-        local numPositions = 4  -- Número de posições
-        local spacing = math.floor(larguraTela / 5)
-        
-        nivel.posicoesX = {}
-        for i = 1, numPositions do
-            nivel.posicoesX[i] = math.floor(i * spacing)
-        end
+    if width and height then
+        gameWidth = width
+        gameHeight = height
+        recalculateDimensions()
     end
 end
 
--- Funções para compatibilidade com a API antiga (não usadas, mas mantidas para compatibilidade)
-function gameplay.setCentro(x, y) end -- Mantido para compatibilidade, não tem efeito
+-- Legacy API (maintained for compatibility)
+function gameplay.setCentro(x, y) end
 function gameplay.setRaioCentral(raio) end
 function gameplay.setRaioExterno(raio) end
 function gameplay.setDistanciaOrigem(dist) end
@@ -120,281 +203,267 @@ function gameplay.setLarguraArcoEscudo(largura) end
 function gameplay.setAnguloEscudo(angulo) end
 function gameplay.getAnguloEscudo() return 0 end
 
--- Carrega uma fase
+-- Loads a level
 function gameplay.carregar(fase)
-    -- Verifica se precisamos criar os generators
+    if not fase then return false end
+    
+    -- Initialize helper modules if needed
     if not levelCreator then
         local Game = require("game")
-        levelCreator = Game.newLevelCreator(larguraTela, alturaTela)
+        levelCreator = Game.newLevelCreator(gameWidth, gameHeight)
         phaseGenerator = Game.newPhaseGenerator()
     end
     
-    -- Configura o novo nível
-    nivel = fase
+    -- Set up the level
+    level = fase
     
-    -- Configura as posições dos blocos com pixels fixos
-    local numPositions = 4
-    local spacing = math.floor(larguraTela / 5)
+    -- Configure track positions
+    calculateTrackPositions()
     
-    nivel.posicoesX = {}
-    for i = 1, numPositions do
-        nivel.posicoesX[i] = math.floor(i * spacing)
-    end
-    
-    -- Configura as cores dos blocos se não estiverem definidas
-    if not nivel.cores then
-        nivel.cores = {
-            {0.92, 0.7, 0.85},  -- Rosa pastel suave
-            {0.7, 0.9, 0.8},    -- Verde mint pastel
-            {0.7, 0.8, 0.95},   -- Azul céu pastel
-            {0.97, 0.9, 0.7}    -- Amarelo pastel suave
+    -- Set default colors if not defined
+    if not level.cores then
+        level.cores = {
+            {0.92, 0.7, 0.85},  -- Soft pastel pink
+            {0.7, 0.9, 0.8},    -- Mint pastel green
+            {0.7, 0.8, 0.95},   -- Sky blue pastel
+            {0.97, 0.9, 0.7}    -- Soft pastel yellow
         }
     end
     
-    -- Inicializa o jogador com posições calculadas com valores fixos
-    -- Raio do jogador - tamanho consistente
-    local raioJogador = math.max(8, math.floor(larguraTela / 20))
+    -- Initialize the player
+    player = initializePlayer()
     
-    -- Posição Y fixa em relação ao fundo da área de jogo
-    local posY = alturaTela - 40
+    -- Reset game state
+    blocks = {}
+    points = 0
+    timeSinceLastBlock = 0
     
-    jogador = {
-        posicaoAtual = 2, -- Começa na posição 2 (de 1 a 4)
-        posicoesJogador = {},
-        x = 0, -- Será definido após calcular as posições
-        y = posY,
-        raio = raioJogador,
-        cor = {0.9, 0.85, 0.95} -- Tom de rosa claro pastel
-    }
-    
-    -- Calcula e preenche as posições do jogador
-    for i = 1, numPositions do
-        jogador.posicoesJogador[i] = math.floor(i * spacing)
-    end
-    
-    -- Define a posição X inicial
-    jogador.x = jogador.posicoesJogador[jogador.posicaoAtual]
-    
-    -- Reset das variáveis de estado
-    blocos = {}
-    pontos = 0
-    tempoUltimoBloco = 0
+    return true
 end
 
--- Atualiza o estado do jogo
+-- Updates the game state
 function gameplay.atualizar(dt, anguloEscudoInput)
-    -- Ignora o anguloEscudoInput (mantido para compatibilidade)
+    if not player or not level then return nil end
     
-    -- Atualiza a posição X do jogador para corresponder à sua posição atual
-    jogador.x = jogador.posicoesJogador[jogador.posicaoAtual]
+    -- Update player X position based on current position
+    player.x = player.posicoesJogador[player.posicaoAtual]
     
-    -- Criar novos blocos baseado no nível
-    tempoUltimoBloco = tempoUltimoBloco + dt
-    if nivel and tempoUltimoBloco >= nivel.intervalo then
-        criarBlocoDoNivel()
-        tempoUltimoBloco = 0
+    -- Create new blocks based on level timing
+    timeSinceLastBlock = timeSinceLastBlock + dt
+    if level and timeSinceLastBlock >= level.intervalo then
+        createBlock()
+        timeSinceLastBlock = 0
     end
     
-    -- Atualizar posição dos blocos
-    for i = #blocos, 1, -1 do
-        local bloco = blocos[i]
-        bloco.y = bloco.y + nivel.velocidade * dt
+    -- Update blocks position and check collisions
+    for i = #blocks, 1, -1 do
+        local block = blocks[i]
+        block.y = block.y + level.velocidade * dt
         
-        -- Verificar colisão com o jogador
-        if verificarColisao(bloco, jogador) then
-            table.remove(blocos, i)
-            pontos = pontos + 10
-        -- Remover blocos que saíram da tela
-        elseif bloco.y > alturaTela + bloco.altura/2 then
-            table.remove(blocos, i)
+        -- Check collision with player
+        if checkCollision(block, player) then
+            table.remove(blocks, i)
+            points = points + 10
+        -- Remove blocks that left the screen
+        elseif block.y > gameHeight + block.height/2 then
+            table.remove(blocks, i)
         end
     end
     
-    -- Retorna nil para compatibilidade (significando que o jogo continua)
-    -- Se a fase terminar por algum motivo, retornar "fase_concluida"
+    -- Return nil for compatibility (game continues)
+    -- Return "fase_concluida" if level should end
     return nil
 end
 
--- Função principal de desenho
-function gameplay.desenhar(desenharUI)
-    -- Salva o estado atual de transformação
+-- Main drawing function
+function gameplay.desenhar(drawUI)
+    if not player or not level then return end
+    
+    -- Save current transform state
     love.graphics.push()
     
-    -- Aplica a transformação para posicionar o gameplay
+    -- Apply transform to position gameplay area
     love.graphics.translate(offsetX, offsetY)
     
-    -- Use a altura passada ou a original
-    local alturaReal = alturaTela
-    
-    -- Fundo semi-transparente para área de jogo (para overlay sobre stage scene)
+    -- Semi-transparent background for gameplay area (for overlay over stage scene)
     love.graphics.setColor(0.97, 0.89, 0.91, 0.85)
-    -- Usa um retângulo com cantos arredondados claros
-    love.graphics.rectangle("fill", 0, 0, larguraTela, alturaReal, 12, 12)
+    love.graphics.rectangle("fill", 0, 0, gameWidth, gameHeight, 12, 12)
     
-    -- Borda suave para área de jogo
+    -- Soft border for gameplay area
     love.graphics.setColor(0.8, 0.75, 0.8, 0.7)
     love.graphics.setLineWidth(2)
-    love.graphics.rectangle("line", 0, 0, larguraTela, alturaReal, 12, 12)
+    love.graphics.rectangle("line", 0, 0, gameWidth, gameHeight, 12, 12)
     
-    -- Título do jogo na parte superior
+    -- Game title at the top
     love.graphics.setColor(0.6, 0.5, 0.7, 0.9)
-    love.graphics.printf("Rhythm Game", 0, 10, larguraTela, "center")
+    local fontSize = math.max(10, math.floor(gameWidth / 15))
+    local font = love.graphics.newFont(fontSize)
+    love.graphics.setFont(font)
+    love.graphics.printf("Rhythm Game", 0, 10, gameWidth, "center")
     
-    -- Desenhar "trilhas" para os blocos caírem
-    for i, pos in ipairs(jogador.posicoesJogador) do
-        -- Largura das trilhas proporcional mas com limites
-        local larguraTrilha = math.min(math.max(larguraTela * 0.2, 15), 30)
+    -- Draw tracks
+    for i, pos in ipairs(player.posicoesJogador) do
+        -- Track width proportional but with limits
+        local trackWidth = math.min(math.max(gameWidth * 0.2, 15), 30)
         
-        -- Cor da trilha ajustada para mostrar a posição atual do jogador (mais transparente para overlay)
-        if i == jogador.posicaoAtual then
-            love.graphics.setColor(0.95, 0.78, 0.85, 0.7) -- Trilha ativa mais brilhante
+        -- Track color based on player position (more transparent for overlay)
+        if i == player.posicaoAtual then
+            love.graphics.setColor(0.95, 0.78, 0.85, 0.7) -- Active track is brighter
         else
-            love.graphics.setColor(0.93, 0.83, 0.87, 0.5) -- Trilhas inativas
+            love.graphics.setColor(0.93, 0.83, 0.87, 0.5) -- Inactive tracks
         end
         
         love.graphics.rectangle("fill", 
-            pos - larguraTrilha/2, 
+            pos - trackWidth/2, 
             0, 
-            larguraTrilha, 
-            alturaReal,
-            8, 8) -- Trilhas com cantos arredondados
+            trackWidth, 
+            gameHeight,
+            8, 8) -- Tracks with rounded corners
     end
     
-    -- Desenhar linha de ação (onde o jogador deve acertar os blocos)
+    -- Draw action line (where player should hit blocks)
     love.graphics.setColor(0.7, 0.65, 0.75, 0.7)
     love.graphics.setLineWidth(2)
-    love.graphics.line(0, jogador.y, larguraTela, jogador.y)
+    love.graphics.line(0, player.y, gameWidth, player.y)
     
-    -- Desenhar blocos com sombras e cantos arredondados
-    for _, bloco in ipairs(blocos) do
-        -- Desenhar sombra sutilmente deslocada
+    -- Draw blocks with shadows and rounded corners
+    for _, block in ipairs(blocks) do
+        -- Draw subtle shadow
         love.graphics.setColor(0.7, 0.7, 0.8, 0.4)
         love.graphics.rectangle("fill", 
-            bloco.x - bloco.largura/2 + 4, 
-            bloco.y - bloco.altura/2 + 4, 
-            bloco.largura, 
-            bloco.altura,
-            bloco.raioCantos, 
-            bloco.raioCantos)
+            block.x - block.width/2 + 4, 
+            block.y - block.height/2 + 4, 
+            block.width, 
+            block.height,
+            block.cornerRadius, 
+            block.cornerRadius)
         
-        -- Desenhar bloco principal com cantos arredondados
-        love.graphics.setColor(bloco.cor)
+        -- Draw main block with rounded corners
+        love.graphics.setColor(block.color)
         love.graphics.rectangle("fill", 
-            bloco.x - bloco.largura/2, 
-            bloco.y - bloco.altura/2, 
-            bloco.largura, 
-            bloco.altura,
-            bloco.raioCantos, 
-            bloco.raioCantos)
+            block.x - block.width/2, 
+            block.y - block.height/2, 
+            block.width, 
+            block.height,
+            block.cornerRadius, 
+            block.cornerRadius)
         
-        -- Borda mais definida nos blocos
+        -- More defined border
         love.graphics.setColor(0.6, 0.6, 0.7, 0.9)
-        love.graphics.setLineWidth(2)  -- Linha mais espessa
+        love.graphics.setLineWidth(2)
         love.graphics.rectangle("line", 
-            bloco.x - bloco.largura/2, 
-            bloco.y - bloco.altura/2, 
-            bloco.largura, 
-            bloco.altura,
-            bloco.raioCantos, 
-            bloco.raioCantos)
+            block.x - block.width/2, 
+            block.y - block.height/2, 
+            block.width, 
+            block.height,
+            block.cornerRadius, 
+            block.cornerRadius)
         
-        -- Pequeno brilho no canto superior esquerdo do bloco
+        -- Small highlight in upper left corner
         love.graphics.setColor(1, 1, 1, 0.5)
         love.graphics.circle("fill", 
-            bloco.x - bloco.largura/2 + bloco.raioCantos, 
-            bloco.y - bloco.altura/2 + bloco.raioCantos, 
-            bloco.raioCantos * 0.5)
+            block.x - block.width/2 + block.cornerRadius, 
+            block.y - block.height/2 + block.cornerRadius, 
+            block.cornerRadius * 0.5)
     end
     
-    -- Desenhar jogador (círculo com efeito de brilho)
-    -- Primeiro desenha um círculo maior para o efeito de brilho
+    -- Draw player (circle with glow effect)
+    -- First draw larger circle for glow effect
     love.graphics.setColor(1, 1, 1, 0.3)
-    love.graphics.circle("fill", jogador.x, jogador.y, jogador.raio * 1.2)
+    love.graphics.circle("fill", player.x, player.y, player.raio * 1.2)
     
-    -- Círculo principal do jogador
+    -- Main player circle
     love.graphics.setColor(0.9, 0.85, 0.95)
-    love.graphics.circle("fill", jogador.x, jogador.y, jogador.raio)
+    love.graphics.circle("fill", player.x, player.y, player.raio)
     
-    -- Borda do jogador
+    -- Player border
     love.graphics.setColor(0.7, 0.65, 0.75)
-    love.graphics.circle("line", jogador.x, jogador.y, jogador.raio)
+    love.graphics.circle("line", player.x, player.y, player.raio)
     
-    -- Efeito de luz no jogador (pequeno círculo na parte superior esquerda)
+    -- Light effect on player (small circle on upper left)
     love.graphics.setColor(1, 1, 1, 0.8)
     love.graphics.circle("fill", 
-        jogador.x - jogador.raio * 0.3, 
-        jogador.y - jogador.raio * 0.3, 
-        jogador.raio * 0.2)
+        player.x - player.raio * 0.3, 
+        player.y - player.raio * 0.3, 
+        player.raio * 0.2)
     
-    -- Se a UI deve ser desenhada pelo módulo (opcional)
-    if desenharUI then
-        -- Fundo semi-transparente para os textos de UI
+    -- Draw UI if requested
+    if drawUI then
+        -- Semi-transparent background for UI text
         love.graphics.setColor(0.2, 0.2, 0.3, 0.6)
-        love.graphics.rectangle("fill", 5, 5, larguraTela - 10, 60, 8, 8)
+        love.graphics.rectangle("fill", 5, 5, gameWidth - 10, 60, 8, 8)
         
-        -- Desenha a pontuação com melhor visibilidade
+        -- Draw score with better visibility
         love.graphics.setColor(0.95, 0.95, 1)
-        love.graphics.print("Pontuação: " .. pontos, 10, 15)
+        local uiFontSize = math.max(10, math.floor(gameWidth / 20))
+        local uiFont = love.graphics.newFont(uiFontSize)
+        love.graphics.setFont(uiFont)
+        love.graphics.print("Pontuação: " .. points, 10, 15)
         
-        -- Desenha o nível se disponível
-        if nivel and nivel.dificuldade then
-            love.graphics.print("Nível: " .. nivel.dificuldade, 10, 35)
+        -- Draw level if available
+        if level and level.dificuldade then
+            love.graphics.print("Nível: " .. level.dificuldade, 10, 35)
         end
     end
     
-    -- Restaura o estado de transformação
+    -- Restore transform state
     love.graphics.pop()
 end
 
--- Obtém a pontuação atual
+-- Get current score
 function gameplay.getPontuacao()
-    return pontos
+    return points
 end
 
--- Obtém o combo atual (mantido para compatibilidade)
+-- Get current combo (kept for compatibility)
 function gameplay.getCombo()
     return 0
 end
 
--- Obtém o multiplicador atual (mantido para compatibilidade)
+-- Get current multiplier (kept for compatibility)
 function gameplay.getMultiplicador()
     return 1
 end
 
--- Obtém o tempo decorrido (mantido para compatibilidade)
+-- Get elapsed time (kept for compatibility)
 function gameplay.getTempoDecorrido()
     return 0
 end
 
--- Função para lidar com teclas pressionadas
+-- Handle key presses
 function gameplay.keypressed(key)
+    if not player then return end
+    
     if key == "left" then
-        -- Move para a posição à esquerda ou volta para a última posição
-        if jogador.posicaoAtual > 1 then
-            jogador.posicaoAtual = jogador.posicaoAtual - 1
+        -- Move left or wrap to rightmost position
+        if player.posicaoAtual > 1 then
+            player.posicaoAtual = player.posicaoAtual - 1
         else
-            -- Se estiver na posição mais à esquerda, vai para a mais à direita
-            jogador.posicaoAtual = #jogador.posicoesJogador
+            player.posicaoAtual = #player.posicoesJogador
         end
     elseif key == "right" then
-        -- Move para a posição à direita ou volta para a primeira posição
-        if jogador.posicaoAtual < #jogador.posicoesJogador then
-            jogador.posicaoAtual = jogador.posicaoAtual + 1
+        -- Move right or wrap to leftmost position
+        if player.posicaoAtual < #player.posicoesJogador then
+            player.posicaoAtual = player.posicaoAtual + 1
         else
-            -- Se estiver na posição mais à direita, vai para a mais à esquerda
-            jogador.posicaoAtual = 1
+            player.posicaoAtual = 1
         end
     end
 end
 
--- Para compatibilidade com código existente
+-- For compatibility with existing code
 function gameplay.pausar() end
 function gameplay.continuar() end
-function gameplay.onResize() 
-    if nivel then
-        gameplay.setDimensoes(larguraTela, alturaTela)
-    end
+
+-- Handle window resize
+function gameplay.onResize()
+    recalculateDimensions()
 end
 
--- Retorna o módulo
+-- Initialize with current screen dimensions
+function gameplay.init()
+    recalculateDimensions()
+end
+
+-- Return the module
 return gameplay

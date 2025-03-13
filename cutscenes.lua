@@ -1,19 +1,26 @@
 -- cutscenes.lua
--- Módulo para gerenciar e exibir cutscenes com diálogos, escolhas e sprites animados
+--[[
+    Module for managing and displaying cutscenes with dialogues,
+    choices, and animated sprites. Handles narrative elements and
+    transitions between game sections.
+]]
+
+local ScreenUtils = require "screen_utils"
+
 local Cutscenes = {}
 Cutscenes.__index = Cutscenes
 
--- Constantes para configuração da interface
-local DIALOG_HEIGHT = 150
-local TEXT_PADDING = 20
-local CHOICE_PADDING = 10
-local PORTRAIT_SIZE = 120
+-- Constants for UI layout - these will be scaled at runtime
+local DIALOG_HEIGHT_PERCENT = 0.25 -- 25% of screen height
+local TEXT_PADDING_BASE = 20
+local CHOICE_PADDING_BASE = 10
+local PORTRAIT_SIZE_BASE = 120
 
--- Função para sanitizar o texto e evitar erros de UTF-8
+-- Sanitizes text to avoid UTF-8 errors
 local function sanitizeText(text)
     if not text then return "" end
     
-    -- Remove caracteres inválidos UTF-8
+    -- Remove invalid UTF-8 characters
     local sanitized = ""
     for i = 1, #text do
         local c = text:sub(i, i)
@@ -25,15 +32,16 @@ local function sanitizeText(text)
     return sanitized
 end
 
+-- Creates a new cutscene instance
 function Cutscenes.new(cutsceneFile)
     local self = setmetatable({}, Cutscenes)
     
-    -- Estado da cutscene
+    -- Cutscene state
     self.isActive = false
     self.currentStep = 1
     self.dialogText = ""
     self.displayedText = ""
-    self.textSpeed = 30 -- caracteres por segundo
+    self.textSpeed = 30 -- characters per second
     self.textTimer = 0
     self.textComplete = false
     self.cutsceneFile = cutsceneFile
@@ -46,20 +54,33 @@ function Cutscenes.new(cutsceneFile)
     self.levelToLoad = nil
     self.selectedLevel = nil
     
-    -- Para efeitos de transição
+    -- Transition effects
     self.fadeAlpha = 1
     self.fadeState = "in" -- "in", "hold", "out"
     self.fadeSpeed = 1
     
+    -- Calculate scaled dimensions
+    self:updateScaledDimensions()
+    
     return self
 end
 
+-- Update scaled dimensions when screen size changes
+function Cutscenes:updateScaledDimensions()
+    -- Scale UI elements based on screen size
+    self.dialogHeight = ScreenUtils.height * DIALOG_HEIGHT_PERCENT
+    self.textPadding = ScreenUtils.scaleValue(TEXT_PADDING_BASE)
+    self.choicePadding = ScreenUtils.scaleValue(CHOICE_PADDING_BASE)
+    self.portraitSize = ScreenUtils.scaleValue(PORTRAIT_SIZE_BASE)
+end
+
+-- Loads cutscene data from file
 function Cutscenes:load()
-    -- Carrega os dados da cutscene do arquivo especificado
+    -- Try to load cutscene data
     local success, cutsceneData = pcall(require, self.cutsceneFile)
     
     if not success then
-        print("Erro ao carregar cutscene:", self.cutsceneFile, cutsceneData)
+        print("Error loading cutscene:", self.cutsceneFile, cutsceneData)
         return false
     end
     
@@ -69,94 +90,128 @@ function Cutscenes:load()
     self.levelToLoad = nil
     self.selectedLevel = nil
     
-    -- Carrega o background inicial se existir
+    -- Load background if defined
     if cutsceneData.background then
-        self.background = love.graphics.newImage(cutsceneData.background)
+        local success, result = pcall(function()
+            return love.graphics.newImage(cutsceneData.background)
+        end)
+        
+        if success then
+            self.background = result
+        else
+            print("Error loading background:", cutsceneData.background)
+        end
     end
     
-    -- Carrega os retratos dos personagens
+    -- Load character portraits
     if cutsceneData.characters then
         for name, data in pairs(cutsceneData.characters) do
             if data.portrait then
-                self.portraits[name] = love.graphics.newImage(data.portrait)
+                local success, result = pcall(function()
+                    return love.graphics.newImage(data.portrait)
+                end)
+                
+                if success then
+                    self.portraits[name] = result
+                else
+                    print("Error loading portrait:", data.portrait)
+                end
             end
         end
     end
     
-    -- Inicia a primeira etapa da cutscene
+    -- Process first step
     self:processCurrentStep()
     
     return true
 end
 
+-- Process the current step of the cutscene
 function Cutscenes:processCurrentStep()
+    -- Check if we're at the end
     if not self.data or not self.data.steps or self.currentStep > #self.data.steps then
-        -- Finaliza a cutscene se não houver mais etapas
         self:complete()
         return
     end
     
     local step = self.data.steps[self.currentStep]
     
-    -- Sanitiza o texto para evitar erros de UTF-8
+    -- Sanitize text to avoid UTF-8 errors
     self.dialogText = sanitizeText(step.text or "")
     self.displayedText = ""
     self.textComplete = false
     self.textTimer = 0
     
-    -- Atualiza o background se especificado nesta etapa
+    -- Update background if specified
     if step.background then
-        self.background = love.graphics.newImage(step.background)
-    end
-    
-    -- Configura os sprites visíveis nesta etapa
-    if step.sprites then
-        self.sprites = {}
-        for i, spriteData in ipairs(step.sprites) do
-            local sprite = {
-                image = love.graphics.newImage(spriteData.image),
-                x = spriteData.x or 0.5,
-                y = spriteData.y or 0.5,
-                scale = spriteData.scale or 1,
-                flip = spriteData.flip or false,
-                -- Novos parâmetros para animação
-                animated = spriteData.animated or false,
-                framesH = spriteData.framesH or 1,
-                framesV = spriteData.framesV or 1,
-                frameDelay = spriteData.frameDelay or 0.2,
-                currentFrame = 1,
-                frameTimer = 0
-            }
-            
-            if sprite.animated then
-                -- Calcula a largura e altura de cada frame
-                sprite.frameWidth = sprite.image:getWidth() / sprite.framesH
-                sprite.frameHeight = sprite.image:getHeight() / sprite.framesV
-                sprite.totalFrames = sprite.framesH * sprite.framesV
-                
-                -- Cria quads para cada frame da animação
-                sprite.quads = {}
-                for v = 0, sprite.framesV - 1 do
-                    for h = 0, sprite.framesH - 1 do
-                        local quad = love.graphics.newQuad(
-                            h * sprite.frameWidth,
-                            v * sprite.frameHeight,
-                            sprite.frameWidth,
-                            sprite.frameHeight,
-                            sprite.image:getDimensions()
-                        )
-                        table.insert(sprite.quads, quad)
-                    end
-                end
-            end
-            
-            table.insert(self.sprites, sprite)
+        local success, result = pcall(function()
+            return love.graphics.newImage(step.background)
+        end)
+        
+        if success then
+            self.background = result
+        else
+            print("Error loading step background:", step.background)
         end
     end
     
-    -- Configura as escolhas, se houver
+    -- Load sprites for this step
+    if step.sprites then
+        self.sprites = {}
+        for i, spriteData in ipairs(step.sprites) do
+            local success, spriteImage = pcall(function()
+                return love.graphics.newImage(spriteData.image)
+            end)
+            
+            if success then
+                local sprite = {
+                    image = spriteImage,
+                    x = spriteData.x or 0.5,
+                    y = spriteData.y or 0.5,
+                    scale = spriteData.scale or 1,
+                    flip = spriteData.flip or false,
+                    -- Animation parameters
+                    animated = spriteData.animated or false,
+                    framesH = spriteData.framesH or 1,
+                    framesV = spriteData.framesV or 1,
+                    frameDelay = spriteData.frameDelay or 0.2,
+                    currentFrame = 1,
+                    frameTimer = 0
+                }
+                
+                -- Set up animation if needed
+                if sprite.animated then
+                    -- Calculate frame dimensions
+                    sprite.frameWidth = sprite.image:getWidth() / sprite.framesH
+                    sprite.frameHeight = sprite.image:getHeight() / sprite.framesV
+                    sprite.totalFrames = sprite.framesH * sprite.framesV
+                    
+                    -- Create quads for each animation frame
+                    sprite.quads = {}
+                    for v = 0, sprite.framesV - 1 do
+                        for h = 0, sprite.framesH - 1 do
+                            local quad = love.graphics.newQuad(
+                                h * sprite.frameWidth,
+                                v * sprite.frameHeight,
+                                sprite.frameWidth,
+                                sprite.frameHeight,
+                                sprite.image:getDimensions()
+                            )
+                            table.insert(sprite.quads, quad)
+                        end
+                    end
+                end
+                
+                table.insert(self.sprites, sprite)
+            else
+                print("Error loading sprite:", spriteData.image)
+            end
+        end
+    end
+    
+    -- Set up choices if any
     if step.choices then
-        -- Sanitiza o texto das escolhas
+        -- Sanitize choice text
         for i, choice in ipairs(step.choices) do
             if choice.text then
                 choice.text = sanitizeText(choice.text)
@@ -169,20 +224,20 @@ function Cutscenes:processCurrentStep()
         self.waitingForChoice = false
     end
     
-    -- Configura o personagem falante, se houver
+    -- Set speaking character
     self.speaker = step.speaker
     
-    -- Verifica se este passo tem uma ação a ser executada
+    -- Check for level loading action
     if step.action and step.action == "startLevel" and step.levelPath then
         self.levelToLoad = step.levelPath
-        -- A ação será executada quando o texto for apresentado completamente
     end
 end
 
+-- Updates cutscene state
 function Cutscenes:update(dt)
     if not self.isActive then return end
     
-    -- Atualiza a transição de fade
+    -- Update fade transition
     if self.fadeState == "in" then
         self.fadeAlpha = math.max(0, self.fadeAlpha - self.fadeSpeed * dt)
         if self.fadeAlpha <= 0 then
@@ -195,7 +250,7 @@ function Cutscenes:update(dt)
         end
     end
     
-    -- Atualiza animações dos sprites
+    -- Update sprite animations
     for _, sprite in ipairs(self.sprites) do
         if sprite.animated then
             sprite.frameTimer = sprite.frameTimer + dt
@@ -209,7 +264,7 @@ function Cutscenes:update(dt)
         end
     end
     
-    -- Atualiza a animação do texto
+    -- Update text animation
     if not self.textComplete and not self.waitingForChoice then
         self.textTimer = self.textTimer + dt
         
@@ -223,32 +278,31 @@ function Cutscenes:update(dt)
     end
 end
 
+-- Draws the cutscene
 function Cutscenes:draw()
-    if not self.isActive then 
-        return -- Retorna imediatamente se a cutscene não estiver ativa
-    end
+    if not self.isActive then return end
     
-    local screenWidth, screenHeight = love.graphics.getDimensions()
-    
-    -- Desenha o background, se existir, ajustando para fullscreen
+    -- Draw background with scaling to fit screen
     if self.background then
         love.graphics.setColor(1, 1, 1)
-        local bgScaleX = screenWidth / self.background:getWidth()
-        local bgScaleY = screenHeight / self.background:getHeight()
+        local bgScaleX = ScreenUtils.width / self.background:getWidth()
+        local bgScaleY = ScreenUtils.height / self.background:getHeight()
         love.graphics.draw(self.background, 0, 0, 0, bgScaleX, bgScaleY)
     end
     
-    -- Desenha os sprites da cena
+    -- Draw sprites
     for _, sprite in ipairs(self.sprites) do
         love.graphics.setColor(1, 1, 1)
-        local posX = sprite.x * screenWidth
-        local posY = sprite.y * screenHeight
+        local posX = sprite.x * ScreenUtils.width
+        local posY = sprite.y * ScreenUtils.height
         
-        local scaleX = sprite.scale
+        -- Scale sprite proportionally to screen size
+        local scaleFactor = ScreenUtils.scale * sprite.scale
+        local scaleX = scaleFactor
         if sprite.flip then scaleX = -scaleX end
         
         if sprite.animated and sprite.quads then
-            -- Desenha o frame atual para sprites animados
+            -- Draw current frame for animated sprites
             local currentQuad = sprite.quads[sprite.currentFrame]
             love.graphics.draw(
                 sprite.image, 
@@ -257,173 +311,238 @@ function Cutscenes:draw()
                 posY, 
                 0, 
                 scaleX, 
-                sprite.scale,
+                scaleFactor,
                 sprite.frameWidth / 2,
                 sprite.frameHeight / 2
             )
         else
-            -- Desenha sprites não animados
+            -- Draw non-animated sprites
             love.graphics.draw(
                 sprite.image, 
                 posX, 
                 posY, 
                 0, 
                 scaleX, 
-                sprite.scale,
+                scaleFactor,
                 sprite.image:getWidth() / 2,
                 sprite.image:getHeight() / 2
             )
         end
     end
     
-    -- Desenha a caixa de diálogo
+    -- Draw dialog box
     love.graphics.setColor(0, 0, 0, 0.8)
-    love.graphics.rectangle("fill", 0, screenHeight - DIALOG_HEIGHT, 
-                          screenWidth, DIALOG_HEIGHT)
+    love.graphics.rectangle(
+        "fill", 
+        0, 
+        ScreenUtils.height - self.dialogHeight, 
+        ScreenUtils.width, 
+        self.dialogHeight
+    )
     
-    -- Desenha o retrato do personagem, se existir
+    -- Draw character portrait if available
     if self.speaker and self.portraits[self.speaker] then
         love.graphics.setColor(1, 1, 1)
-        love.graphics.draw(self.portraits[self.speaker], 
-                          TEXT_PADDING, screenHeight - DIALOG_HEIGHT + TEXT_PADDING, 0,
-                          PORTRAIT_SIZE / self.portraits[self.speaker]:getWidth(),
-                          PORTRAIT_SIZE / self.portraits[self.speaker]:getHeight())
+        
+        -- Calculate portrait scaling to maintain aspect ratio
+        local portrait = self.portraits[self.speaker]
+        local portraitScaleX = self.portraitSize / portrait:getWidth()
+        local portraitScaleY = self.portraitSize / portrait:getHeight()
+        
+        love.graphics.draw(
+            portrait, 
+            self.textPadding, 
+            ScreenUtils.height - self.dialogHeight + self.textPadding, 
+            0,
+            portraitScaleX,
+            portraitScaleY
+        )
     end
     
-    -- Desenha o nome do personagem, se existir
+    -- Draw character name
     if self.speaker and self.data.characters and self.data.characters[self.speaker] then
         love.graphics.setColor(1, 1, 1)
-        love.graphics.print(self.data.characters[self.speaker].name or self.speaker, 
-                           TEXT_PADDING * 2 + PORTRAIT_SIZE, 
-                           screenHeight - DIALOG_HEIGHT + TEXT_PADDING)
+        local fontSize = ScreenUtils.scaleFontSize(14)
+        local font = love.graphics.newFont(fontSize)
+        love.graphics.setFont(font)
+        
+        love.graphics.print(
+            self.data.characters[self.speaker].name or self.speaker, 
+            self.textPadding * 2 + self.portraitSize, 
+            ScreenUtils.height - self.dialogHeight + self.textPadding
+        )
     end
     
-    -- Desenha o texto do diálogo
+    -- Draw dialog text
     love.graphics.setColor(1, 1, 1)
-    local textX = TEXT_PADDING
+    local textX = self.textPadding
     if self.speaker and self.portraits[self.speaker] then
-        textX = TEXT_PADDING * 2 + PORTRAIT_SIZE
+        textX = self.textPadding * 2 + self.portraitSize
     end
     
-    -- Usa pcall para capturar erros durante a renderização do texto
-    local success, errorMsg = pcall(function()
+    -- Safely draw text with error handling
+    local fontSize = ScreenUtils.scaleFontSize(14)
+    local font = love.graphics.newFont(fontSize)
+    love.graphics.setFont(font)
+    
+    local success = pcall(function()
         love.graphics.printf(
             self.displayedText, 
-            textX, screenHeight - DIALOG_HEIGHT + TEXT_PADDING * 3,
-            screenWidth - textX - TEXT_PADDING, "left")
+            textX, 
+            ScreenUtils.height - self.dialogHeight + self.textPadding * 3,
+            ScreenUtils.width - textX - self.textPadding, 
+            "left"
+        )
     end)
 
-    -- Se houver erro, tenta novamente com uma versão ainda mais sanitizada do texto
+    -- Fallback on error
     if not success then
-        local emergencyText = ""
+        -- Create ASCII-only version of text
+        local safeText = ""
         for i = 1, #self.displayedText do
             local c = self.displayedText:sub(i, i)
-            if c:byte() < 128 then -- Usa apenas ASCII
-                emergencyText = emergencyText .. c
+            if c:byte() < 128 then -- ASCII only
+                safeText = safeText .. c
             else
-                emergencyText = emergencyText .. "?" -- Substitui caracteres não-ASCII
+                safeText = safeText .. "?"
             end
         end
         
         love.graphics.printf(
-            emergencyText,
-            textX, screenHeight - DIALOG_HEIGHT + TEXT_PADDING * 3,
-            screenWidth - textX - TEXT_PADDING, "left")
+            safeText,
+            textX, 
+            ScreenUtils.height - self.dialogHeight + self.textPadding * 3,
+            ScreenUtils.width - textX - self.textPadding, 
+            "left"
+        )
     end
     
-    -- Desenha "Continuar" ou as escolhas
+    -- Draw "Continue" or choices
     if self.textComplete then
         if self.waitingForChoice and #self.choices > 0 then
-            -- Desenha as opções de escolha
-            local choiceY = screenHeight - DIALOG_HEIGHT / 2
+            -- Draw choice options
+            local choiceY = ScreenUtils.height - self.dialogHeight / 2
+            
+            -- Use font that scales with screen size
+            local choiceFontSize = ScreenUtils.scaleFontSize(14)
+            local choiceFont = love.graphics.newFont(choiceFontSize)
+            love.graphics.setFont(choiceFont)
+            
             for i, choice in ipairs(self.choices) do
                 love.graphics.setColor(0.3, 0.3, 0.3, 0.8)
                 
-                -- Usa pcall para evitar erros ao obter a largura do texto
+                -- Get choice width safely
                 local choiceWidth
                 local success, result = pcall(function()
-                    return love.graphics.getFont():getWidth(choice.text) + CHOICE_PADDING * 2
+                    return choiceFont:getWidth(choice.text) + self.choicePadding * 2
                 end)
                 
                 if success then
                     choiceWidth = result
                 else
-                    -- Valor padrão caso ocorra erro
-                    choiceWidth = 200
+                    choiceWidth = ScreenUtils.scaleValue(200) -- Default fallback
                 end
                 
-                local choiceHeight = love.graphics.getFont():getHeight() + CHOICE_PADDING
-                local choiceX = screenWidth / 2 - choiceWidth / 2
+                local choiceHeight = choiceFont:getHeight() + self.choicePadding
+                local choiceX = ScreenUtils.width / 2 - choiceWidth / 2
                 
-                -- Ajusta a posição Y com base no número de escolhas
-                local offsetY = (-#self.choices / 2 + (i - 1)) * (choiceHeight + CHOICE_PADDING)
+                -- Calculate Y position based on number of choices
+                local spacing = ScreenUtils.scaleValue(10)
+                local offsetY = (-#self.choices / 2 + (i - 1)) * (choiceHeight + spacing)
                 local currentChoiceY = choiceY + offsetY
                 
-                love.graphics.rectangle("fill", choiceX, currentChoiceY, choiceWidth, choiceHeight)
+                -- Draw choice background
+                love.graphics.rectangle(
+                    "fill", 
+                    choiceX, 
+                    currentChoiceY, 
+                    choiceWidth, 
+                    choiceHeight,
+                    4, -- Rounded corners
+                    4
+                )
                 
+                -- Draw choice text
                 love.graphics.setColor(1, 1, 1)
-                -- Usa pcall novamente ao desenhar o texto
                 pcall(function()
-                    love.graphics.print(choice.text, 
-                                      choiceX + CHOICE_PADDING, 
-                                      currentChoiceY + CHOICE_PADDING / 2)
+                    love.graphics.print(
+                        choice.text, 
+                        choiceX + self.choicePadding, 
+                        currentChoiceY + self.choicePadding / 2
+                    )
                 end)
             end
         else
-            -- Desenha indicador de "Continuar"
+            -- Draw "Continue" indicator
             love.graphics.setColor(1, 1, 1)
-            love.graphics.print("Pressione [ESPAÇO] para continuar", 
-                              screenWidth - 250, screenHeight - TEXT_PADDING * 2)
+            local fontSize = ScreenUtils.scaleFontSize(14)
+            local font = love.graphics.newFont(fontSize)
+            love.graphics.setFont(font)
+            
+            local continueText = "Pressione [ESPAÇO] para continuar"
+            local textWidth = font:getWidth(continueText)
+            
+            love.graphics.print(
+                continueText, 
+                ScreenUtils.width - textWidth - self.textPadding, 
+                ScreenUtils.height - self.textPadding * 2
+            )
         end
     end
     
-    -- Desenha o efeito de fade
+    -- Draw fade effect
     if self.fadeAlpha > 0 then
         love.graphics.setColor(0, 0, 0, self.fadeAlpha)
-        love.graphics.rectangle("fill", 0, 0, screenWidth, screenHeight)
+        love.graphics.rectangle("fill", 0, 0, ScreenUtils.width, ScreenUtils.height)
     end
+    
+    -- Reset color
+    love.graphics.setColor(1, 1, 1)
 end
 
+-- Handle mouse click events
 function Cutscenes:mousepressed(x, y, button)
     if not self.isActive or button ~= 1 then return end
     
-    -- Se estamos esperando uma escolha e o texto está completo
+    -- Handle choices when waiting for selection
     if self.waitingForChoice and self.textComplete then
-        local screenWidth, screenHeight = love.graphics.getDimensions()
-        local choiceY = screenHeight - DIALOG_HEIGHT / 2
+        local choiceY = ScreenUtils.height - self.dialogHeight / 2
+        
+        -- Use scaled font for calculations
+        local choiceFontSize = ScreenUtils.scaleFontSize(14)
+        local choiceFont = love.graphics.newFont(choiceFontSize)
         
         for i, choice in ipairs(self.choices) do
-            -- Usa pcall para evitar erros ao obter a largura do texto
+            -- Calculate choice dimensions
             local choiceWidth
             local success, result = pcall(function()
-                return love.graphics.getFont():getWidth(choice.text) + CHOICE_PADDING * 2
+                return choiceFont:getWidth(choice.text) + self.choicePadding * 2
             end)
             
             if success then
                 choiceWidth = result
             else
-                -- Valor padrão caso ocorra erro
-                choiceWidth = 200
+                choiceWidth = ScreenUtils.scaleValue(200) -- Default fallback
             end
             
-            local choiceHeight = love.graphics.getFont():getHeight() + CHOICE_PADDING
-            local choiceX = screenWidth / 2 - choiceWidth / 2
+            local choiceHeight = choiceFont:getHeight() + self.choicePadding
+            local choiceX = ScreenUtils.width / 2 - choiceWidth / 2
             
-            -- Ajusta a posição Y com base no número de escolhas
-            local offsetY = (-#self.choices / 2 + (i - 1)) * (choiceHeight + CHOICE_PADDING)
+            -- Calculate Y position
+            local spacing = ScreenUtils.scaleValue(10)
+            local offsetY = (-#self.choices / 2 + (i - 1)) * (choiceHeight + spacing)
             local currentChoiceY = choiceY + offsetY
             
-            -- Verifica se o clique foi dentro da área da escolha
+            -- Check if click is inside this choice
             if x >= choiceX and x <= choiceX + choiceWidth and
                y >= currentChoiceY and y <= currentChoiceY + choiceHeight then
-                -- Executa a ação associada à escolha
                 
-                -- Processa ação especial se existir
+                -- Handle special action
                 if choice.action and choice.action == "startLevel" and choice.levelPath then
                     self.levelToLoad = choice.levelPath
                 end
                 
-                -- Vai para o próximo passo, se especificado
+                -- Go to next step if specified
                 if choice.nextStep then
                     self.currentStep = choice.nextStep
                     self.waitingForChoice = false
@@ -433,20 +552,20 @@ function Cutscenes:mousepressed(x, y, button)
             end
         end
     else
-        -- Se o texto ainda não está completo, completa-o
+        -- Complete text display if not complete
         if not self.textComplete then
             self.displayedText = self.dialogText
             self.textComplete = true
         else
-            -- Se há uma ação para este passo, executa-a
+            -- Execute level loading action if set
             if self.levelToLoad then
                 self.selectedLevel = self.levelToLoad
-                -- Armazena o nível a ser carregado e finaliza a cutscene
+                -- Store level to load and finish cutscene
                 self:complete()
                 return
             end
             
-            -- Avança para a próxima etapa
+            -- Advance to next step if not waiting for choice
             if not self.waitingForChoice then
                 self.currentStep = self.currentStep + 1
                 self:processCurrentStep()
@@ -455,24 +574,25 @@ function Cutscenes:mousepressed(x, y, button)
     end
 end
 
+-- Handle keyboard events
 function Cutscenes:keypressed(key)
     if not self.isActive then return end
     
     if key == "space" or key == "return" then
-        -- Comportamento similar ao mousepressed
+        -- Similar behavior to mousepressed
         if not self.textComplete then
             self.displayedText = self.dialogText
             self.textComplete = true
         else
-            -- Se há uma ação para este passo, executa-a
+            -- Execute level loading action if set
             if self.levelToLoad then
                 self.selectedLevel = self.levelToLoad
-                -- Armazena o nível a ser carregado e finaliza a cutscene
+                -- Store level to load and finish cutscene
                 self:complete()
                 return
             end
             
-            -- Só avança se não estiver esperando uma escolha
+            -- Only advance if not waiting for choice
             if not self.waitingForChoice then
                 self.currentStep = self.currentStep + 1
                 self:processCurrentStep()
@@ -480,17 +600,24 @@ function Cutscenes:keypressed(key)
         end
     end
     
-    -- Adicione teclas para pular a cutscene inteira
+    -- Skip entire cutscene with Escape
     if key == "escape" then
         self.fadeState = "out"
     end
 end
 
+-- Complete the cutscene
 function Cutscenes:complete()
     self.isActive = false
     if self.onComplete then
         self.onComplete()
     end
+end
+
+-- Handle window resize
+function Cutscenes:resize(width, height)
+    -- Update scaled dimensions when window size changes
+    self:updateScaledDimensions()
 end
 
 return Cutscenes

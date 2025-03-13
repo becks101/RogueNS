@@ -1,14 +1,14 @@
 -- menu.lua
 local ButtonTypes = require "button"
+local ScreenUtils = require "screen_utils"
 local Menu = {}
 Menu.__index = Menu
-
 
 function Menu.new()
     local self = setmetatable({}, Menu)
     self.currentMenu = "main"
     self.buttons = {}
-    self.galleryPlayer = nil  -- Para a galeria (agora mais genérica)
+    self.galleryPlayer = nil  -- Gallery viewer
     self:loadMainMenu()
     return self
 end
@@ -16,84 +16,101 @@ end
 function Menu:loadMainMenu()
     self.currentMenu = "main"
     self.galleryPlayer = nil
-    local screenWidth, screenHeight = love.graphics.getDimensions()
     
-    -- Posicionamento responsivo
-    local buttonWidth = 200
-    local buttonHeight = 50
-    local startY = screenHeight * 0.2  -- 20% da altura
+    -- Fixed button sizes - will be scaled by screen utils
+    local baseButtonWidth = 200
+    local baseButtonHeight = 50
+    local buttonSpacing = 70 -- Vertical space between buttons
     
+    -- Calculate scaled sizes
+    local buttonWidth, buttonHeight = ScreenUtils.getUIElementSize(baseButtonWidth, baseButtonHeight)
+    
+    -- Calculate starting position (20% from top)
+    local startY = ScreenUtils.height * 0.2
+    
+    -- Menu options - positioned using screen utilities
     self.buttons = {
-        ButtonTypes.Button.new((screenWidth - buttonWidth)/2, startY, buttonWidth, buttonHeight, "Novo Jogo", function() 
-            -- Em vez de iniciar o jogo diretamente, carregamos a cutscene de introdução
-            self.cutscenePlayer = require("cutscenes").new("cutscenes/intro")
-            
-            -- Configuramos um callback para quando a cutscene terminar
-            self.cutscenePlayer.onComplete = function()
-                -- Esta função será chamada quando a cutscene terminar
-                -- Se não houver escolha de fase, voltamos ao menu
-                if not self.cutscenePlayer.selectedLevel then
-                    self:loadMainMenu()
+        ButtonTypes.Button.new(
+            ScreenUtils.centerElement(buttonWidth, buttonHeight),
+            startY, 
+            buttonWidth, 
+            buttonHeight, 
+            "Novo Jogo", 
+            function() 
+                -- Load intro cutscene instead of starting game directly
+                self.cutscenePlayer = require("cutscenes").new("cutscenes/intro")
+                
+                -- Set completion callback
+                self.cutscenePlayer.onComplete = function()
+                    -- If no level was selected, return to menu
+                    if not self.cutscenePlayer.selectedLevel then
+                        self:loadMainMenu()
+                    end
+                end
+                
+                -- Start cutscene
+                if self.cutscenePlayer:load() then
+                    self.currentMenu = "cutscene"
+                else
+                    print("Failed to load intro cutscene")
                 end
             end
-            
-            -- Iniciamos a cutscene
-            if self.cutscenePlayer:load() then
-                self.currentMenu = "cutscene"
-            else
-                print("Falha ao carregar a cutscene de introdução")
-            end
-        end),
-        ButtonTypes.Button.new((screenWidth - buttonWidth)/2, startY + 100, buttonWidth, buttonHeight, "Galeria", function() self:loadGalleryMenu() end),
-        ButtonTypes.Button.new((screenWidth - buttonWidth)/2, startY + 200, buttonWidth, buttonHeight, "Configurações", function() self:loadSettingsMenu() end),
-        ButtonTypes.Button.new((screenWidth - buttonWidth)/2, startY + 300, buttonWidth, buttonHeight, "Sair", function() love.event.quit() end)
+        ),
+        ButtonTypes.Button.new(
+            ScreenUtils.centerElement(buttonWidth, buttonHeight),
+            startY + buttonSpacing, 
+            buttonWidth, 
+            buttonHeight, 
+            "Galeria", 
+            function() self:loadGalleryMenu() end
+        ),
+        ButtonTypes.Button.new(
+            ScreenUtils.centerElement(buttonWidth, buttonHeight),
+            startY + buttonSpacing * 2, 
+            buttonWidth, 
+            buttonHeight, 
+            "Configurações", 
+            function() self:loadSettingsMenu() end
+        ),
+        ButtonTypes.Button.new(
+            ScreenUtils.centerElement(buttonWidth, buttonHeight),
+            startY + buttonSpacing * 3, 
+            buttonWidth, 
+            buttonHeight, 
+            "Sair", 
+            function() love.event.quit() end
+        )
     }
-end
-
-function Menu:resize(w, h)
-    -- Se estiver no estado de gameplay, propaga para o Game
-    if self.currentMenu == "gameplay" and self.gameInstance then
-        self.gameInstance:resize(w, h)
-    end
-    
-    -- Redimensionamento já é tratado nos callbacks dos botões na maioria dos menus
-    -- Então apenas atualizamos os offsets quando necessário
-    
-    -- Se estiver no estado de cutscene
-    if self.currentMenu == "cutscene" and self.cutscenePlayer and self.cutscenePlayer.resize then
-        self.cutscenePlayer:resize(w, h)
-    end
-    
-    -- Se estiver no estado de galeria
-    if self.currentMenu == "gallery" and self.galleryPlayer and self.galleryPlayer.resize then
-        self.galleryPlayer:resize(w, h)
-    end
 end
 
 function Menu:loadGalleryMenu()
     self.currentMenu = "gallery"
-    -- Usa o novo GaleryManager em vez de stagescenegallery
+    -- Use GaleryManager instead of StageSceneGallery
     self.galleryPlayer = require("galeryManager").new()
-    self.buttons = {} -- Limpa os botões anteriores
-    self.tabs = {}    -- Limpa as abas anteriores
+    self.buttons = {} -- Clear previous buttons
+    self.tabs = {}    -- Clear previous tabs
     
-    local screenWidth = love.graphics.getDimensions()
-    local tabWidth = 150
-    local tabSpacing = 20
+    -- Tab dimensions
+    local tabWidth = ScreenUtils.scaleValue(150)
+    local tabHeight = ScreenUtils.scaleValue(40)
+    local tabSpacing = ScreenUtils.scaleValue(20)
     local totalTabsWidth = (tabWidth * 3) + (tabSpacing * 2)
-    local startX = (screenWidth - totalTabsWidth)/2
-
-    -- Cria container para as abas
+    
+    -- Calculate tab starting position
+    local startX = (ScreenUtils.width - totalTabsWidth) / 2
+    local tabY = ScreenUtils.scaleValue(100)
+    
+    -- Create container for tabs
     self.tabs = {}
     
-    -- Função para desselecionar todas as abas
+    -- Function to deselect all tabs
     local function deselectAllTabs()
         for _, tab in ipairs(self.tabs) do
             tab.selected = false
         end
     end
 
-    -- Cria as abas
+    -- Create tabs
     local tabsData = {
         {label = "Itens", tabName = "items"},
         {label = "Cenas de Fase", tabName = "stage"}, 
@@ -101,16 +118,16 @@ function Menu:loadGalleryMenu()
     }
 
     for i, data in ipairs(tabsData) do
-        local tabIndex = i -- Captura o índice atual
+        local tabIndex = i -- Capture current index
         local tab = ButtonTypes.Tab.new(
             startX + ((tabWidth + tabSpacing) * (i-1)),
-            100,
+            tabY,
             tabWidth,
-            50,
+            tabHeight,
             data.label,
             function()
                 deselectAllTabs()
-                self.tabs[tabIndex].selected = true -- Acessa pela tabela
+                self.tabs[tabIndex].selected = true -- Access by table
                 self.galleryPlayer.currentTab = data.tabName
                 self.galleryPlayer:refreshIcons()
             end
@@ -119,15 +136,17 @@ function Menu:loadGalleryMenu()
         table.insert(self.buttons, tab)
     end
 
-    -- Seleciona a aba padrão inicialmente
+    -- Select default tab initially
     self.tabs[2].selected = true  -- "Cenas de Fase"
     self.galleryPlayer.currentTab = "stage"
     
-    -- Adiciona botão voltar
+    -- Add back button
+    local backButtonWidth, backButtonHeight = ScreenUtils.getUIElementSize(200, 50)
     table.insert(self.buttons, ButtonTypes.Button.new(
-        (screenWidth - 200)/2, 
-        love.graphics.getHeight() - 100, 
-        200, 50, 
+        ScreenUtils.centerElement(backButtonWidth, backButtonHeight, 0, ScreenUtils.height * 0.4),
+        ScreenUtils.height - backButtonHeight - ScreenUtils.scaleValue(50), 
+        backButtonWidth, 
+        backButtonHeight, 
         "Voltar", 
         function() self:loadMainMenu() end
     ))
@@ -139,21 +158,24 @@ function Menu:loadSettingsMenu()
     local Config = require "config"
     self.currentMenu = "settings"
     self.galleryPlayer = nil
-    local screenWidth, screenHeight = love.graphics.getDimensions()
     
-    -- Elementos centralizados
-    local elementWidth = 200
-    local startX = (screenWidth - elementWidth) / 2
-    local verticalSpacing = 80
+    -- Calculate element sizes
+    local elementWidth, elementHeight = ScreenUtils.getUIElementSize(200, 50)
+    local toggleWidth, toggleHeight = ScreenUtils.getUIElementSize(90, 40)
+    local verticalSpacing = ScreenUtils.scaleValue(80)
     
-    -- Grupo Fullscreen
-    local fullscreenGroupWidth = 190
-    local fullscreenX = (screenWidth - fullscreenGroupWidth) / 2
+    -- Fullscreen group
+    local fullscreenGroupWidth = toggleWidth * 2 + ScreenUtils.scaleValue(20)
+    local fullscreenX = (ScreenUtils.width - fullscreenGroupWidth) / 2
+    local groupY = verticalSpacing
     
     fullscreenOn = ButtonTypes.Selector.new(
         fullscreenX, 
-        verticalSpacing, 
-        90, 40, "On", function()
+        groupY, 
+        toggleWidth, 
+        toggleHeight, 
+        "On", 
+        function()
             Config.setFullscreen(true)
             fullscreenOn.selected = true
             fullscreenOff.selected = false
@@ -161,43 +183,47 @@ function Menu:loadSettingsMenu()
     )
     
     fullscreenOff = ButtonTypes.Selector.new(
-        fullscreenX + 100, 
-        verticalSpacing, 
-        90, 40, "Off", function()
+        fullscreenX + toggleWidth + ScreenUtils.scaleValue(20), 
+        groupY, 
+        toggleWidth, 
+        toggleHeight, 
+        "Off", 
+        function()
             Config.setFullscreen(false)
             fullscreenOn.selected = false
-            fullscreenOff.selected = false
+            fullscreenOff.selected = true
         end
     )
 
-    -- Slider de Volume
-    local sliderWidth = 200
-    local sliderX = (screenWidth - sliderWidth) / 2
+    -- Volume slider
+    local sliderWidth = ScreenUtils.scaleValue(200)
+    local sliderX = (ScreenUtils.width - sliderWidth) / 2
     local volumeSlider = ButtonTypes.VolumeSlider.new(
         sliderX,
-        verticalSpacing + 80,
+        groupY + verticalSpacing,
         sliderWidth,
         0, 1, 
         Config.settings.volume, 
         function(v) Config.setVolume(v) end
     )
 
-    -- Botão Voltar
-    local backButtonY = screenHeight - 100
+    -- Back button
+    local backButtonY = ScreenUtils.height - elementHeight - ScreenUtils.scaleValue(50)
     self.buttons = {
         fullscreenOn,
         fullscreenOff,
         volumeSlider,
         ButtonTypes.Button.new(
-            (screenWidth - elementWidth)/2, 
+            (ScreenUtils.width - elementWidth) / 2, 
             backButtonY, 
-            elementWidth, 50, 
+            elementWidth, 
+            elementHeight, 
             "Voltar", 
             function() self:loadMainMenu() end
         )
     }
 
-    -- Estado inicial
+    -- Set initial state
     if Config.settings.fullscreen then
         fullscreenOn.selected = true
         fullscreenOff.selected = false
@@ -207,61 +233,60 @@ function Menu:loadSettingsMenu()
     end
 end
 
-
 function Menu:update(dt)
     local mx, my = love.mouse.getPosition()
     
     if self.currentMenu == "cutscene" and self.cutscenePlayer then
-        -- Atualiza a cutscene
+        -- Update cutscene
         self.cutscenePlayer:update(dt)
         
-        -- Verifica se a cutscene terminou e selecionou um nível
+        -- Check if cutscene has ended and selected a level
         if not self.cutscenePlayer.isActive then
             if self.cutscenePlayer.selectedLevel then
-                -- A cutscene terminou e selecionou um nível, carregue-o
+                -- Cutscene ended and selected a level, load it
                 if not self.gameInstance then
                     self.gameInstance = require("game").new()
                 end
                 
-                -- Configura a posição dos círculos
+                -- Configure circle position
                 self.gameInstance:setCirclePosition(0.8, 0.8)
                 
-                -- Carrega o nível selecionado
+                -- Load selected level
                 local levelPath = self.cutscenePlayer.selectedLevel
                 
-                -- Certifica que o caminho não tenha a extensão duplicada
+                -- Ensure path doesn't have duplicated extension
                 if levelPath:sub(-4) ~= ".lua" then
-                    levelPath = levelPath -- Mantém como está
+                    levelPath = levelPath -- Keep as is
                 end
                 
                 if self.gameInstance:loadLevel(levelPath) then
                     self.currentMenu = "gameplay"
                 else
-                    print("Falha ao carregar o nível: " .. tostring(levelPath))
+                    print("Failed to load level: " .. tostring(levelPath))
                     self:loadMainMenu()
                 end
             else
-                -- A cutscene terminou mas não selecionou um nível, volta ao menu principal
+                -- Cutscene ended without selecting a level, return to main menu
                 self:loadMainMenu()
             end
             
-            -- Limpa a referência à cutscene para evitar mais processamento
+            -- Clear cutscene reference
             self.cutscenePlayer = nil
         end
 
     elseif self.currentMenu == "gameplay" and self.gameInstance then
-        -- Código existente para estado de gameplay
+        -- Existing gameplay update code
         local result = self.gameInstance:update(dt)
         
-        -- Se a fase terminar ou o usuário sair, volta para o menu
+        -- If level ends or user exits, return to menu
         if result == "menu" or result == "fase_concluida" then
             self:loadMainMenu()
         end
     elseif self.currentMenu == "gallery" and self.galleryPlayer then
-        -- Atualiza a galeria
+        -- Update gallery
         self.galleryPlayer:update(dt)
         
-        -- Botões da galeria (abas e voltar) quando não estiver visualizando conteúdo
+        -- Update gallery buttons when not viewing content
         if not self.galleryPlayer.currentScene then
             for _, button in ipairs(self.buttons) do
                 if button.updateHover then button:updateHover(mx, my) end
@@ -269,7 +294,7 @@ function Menu:update(dt)
             end
         end
     else
-        -- Código existente para outros menus
+        -- Update buttons for other menus
         for _, button in ipairs(self.buttons) do
             if button.updateHover then button:updateHover(mx, my) end
             if button.update then button:update(dt) end
@@ -280,84 +305,84 @@ end
 function Menu:draw()
     if self.currentMenu == "cutscene" then
         if not self.cutscenePlayer then
-            -- A cutscene foi removida, volte para o menu principal
+            -- Cutscene was removed, return to main menu
             self:loadMainMenu()
-            -- Desenha o menu principal enquanto isso
+            -- Draw main menu meanwhile
             for _, button in ipairs(self.buttons) do
                 if button.draw then button:draw() end
             end
             return
         elseif not self.cutscenePlayer.isActive then
-            -- A cutscene foi finalizada, mas ainda não atualizamos o menu
-            -- Este caso deve ser tratado pelo método update() antes de chegarmos aqui
-            -- mas colocamos esta verificação como garantia
+            -- Cutscene finished but we haven't updated menu yet
+            -- This case should be handled by update() before we get here
             return
         else
-            -- A cutscene está ativa, desenhe-a
+            -- Cutscene is active, draw it
             self.cutscenePlayer:draw()
         end
     elseif self.currentMenu == "gameplay" and self.gameInstance then
-        -- Desenha o jogo quando estiver no estado de gameplay
+        -- Draw the game when in gameplay state
         self.gameInstance:draw()
     elseif self.currentMenu == "gallery" and self.galleryPlayer then
-        -- Desenhar fundo para a galeria
+        -- Draw background for gallery
         love.graphics.setColor(0.1, 0.1, 0.1, 1)
-        love.graphics.rectangle("fill", 0, 0, love.graphics.getDimensions())
+        love.graphics.rectangle("fill", 0, 0, ScreenUtils.width, ScreenUtils.height)
         
-        -- Desenha título da galeria
+        -- Draw gallery title
         love.graphics.setColor(1, 1, 1, 1)
         local font = love.graphics.getFont()
         local title = "Galeria de Conteúdo"
         local titleWidth = font:getWidth(title)
-        love.graphics.print(title, (love.graphics.getWidth() - titleWidth) / 2, 20)
+        love.graphics.print(title, (ScreenUtils.width - titleWidth) / 2, ScreenUtils.scaleValue(20))
         
-        -- Modo visualização ou galeria
+        -- Viewing mode or gallery mode
         if self.galleryPlayer.currentScene then
-            -- Modo visualização da cena
+            -- Content viewing mode
             self.galleryPlayer:draw()
         else
-            -- Modo galeria normal
-            -- Desenha os botões de abas e voltar
+            -- Gallery browsing mode
+            -- Draw tab buttons and back button
             for _, button in ipairs(self.buttons) do
                 button:draw()
             end
             
-            -- Desenha os ícones da galeria
+            -- Draw gallery icons
             for _, icon in ipairs(self.galleryPlayer.icons) do
                 icon:draw()
             end
             
-            -- Mensagem se não houver conteúdo
+            -- Show message if no content available
             if #self.galleryPlayer.icons == 0 then
                 love.graphics.setColor(0.7, 0.7, 0.7, 1)
                 local msg = "Nenhum conteúdo disponível nesta categoria"
                 local msgWidth = font:getWidth(msg)
                 love.graphics.print(
                     msg, 
-                    (love.graphics.getWidth() - msgWidth) / 2, 
-                    love.graphics.getHeight() / 2
+                    (ScreenUtils.width - msgWidth) / 2, 
+                    ScreenUtils.height / 2
                 )
             end
         end
     else
-        -- Desenha outros menus
+        -- Draw other menus
         if self.currentMenu == "settings" then
             love.graphics.setColor(1, 1, 1)
-            local screenWidth = love.graphics.getDimensions()
             
+            -- Calculate title positions
             local titles = {
-                {text = "Fullscreen", y = 50},
-                {text = "Volume", y = 130}
+                {text = "Fullscreen", y = ScreenUtils.scaleValue(50)},
+                {text = "Volume", y = ScreenUtils.scaleValue(130)}
             }
             
+            -- Draw setting titles
             for _, title in ipairs(titles) do
                 local font = love.graphics.getFont()
                 local textWidth = font:getWidth(title.text)
-                love.graphics.print(title.text, (screenWidth - textWidth)/2, title.y)
+                love.graphics.print(title.text, (ScreenUtils.width - textWidth)/2, title.y)
             end
         end
         
-        -- Desenha botões do menu atual
+        -- Draw current menu buttons
         for _, button in ipairs(self.buttons) do
             if button.draw then button:draw() end
         end
@@ -366,16 +391,16 @@ end
 
 function Menu:mousepressed(x, y, button)
     if self.currentMenu == "cutscene" and self.cutscenePlayer then
-        -- Passa o evento para a cutscene
+        -- Pass event to cutscene
         self.cutscenePlayer:mousepressed(x, y, button)
     elseif self.currentMenu == "gameplay" and self.gameInstance then
-        -- Passa eventos de mouse para o jogo
+        -- Pass mouse events to game
         self.gameInstance:mousepressed(x, y, button)
     elseif self.currentMenu == "gallery" and self.galleryPlayer then
-        -- Passa o evento para o gerenciador da galeria
+        -- Pass event to gallery manager
         self.galleryPlayer:mousepressed(x, y, button)
         
-        -- Se não estiver visualizando uma cena, também processa os botões de menu
+        -- Process menu buttons if not viewing content
         if not self.galleryPlayer.currentScene then
             for _, btn in ipairs(self.buttons) do
                 if btn.mousepressed then
@@ -384,7 +409,7 @@ function Menu:mousepressed(x, y, button)
             end
         end
     else
-        -- Outros menus
+        -- Other menus
         for _, btn in ipairs(self.buttons) do
             if btn.mousepressed then
                 btn:mousepressed(x, y, button)
@@ -393,27 +418,50 @@ function Menu:mousepressed(x, y, button)
     end
 end
 
-
 function Menu:mousereleased(x, y, button)
-    if self.galleryPlayer then
+    if self.galleryPlayer and self.galleryPlayer.mousereleased then
         self.galleryPlayer:mousereleased(x, y, button)
     else
         for _, btn in ipairs(self.buttons) do
-            if btn.mousereleased then btn:mousereleased(x, y, button) end
+            if btn.mousereleased then 
+                btn:mousereleased(x, y, button) 
+            end
         end
     end
 end
 
 function Menu:keypressed(key)
     if self.currentMenu == "cutscene" and self.cutscenePlayer then
-        -- Passa o evento para a cutscene
+        -- Pass event to cutscene
         self.cutscenePlayer:keypressed(key)
     elseif self.currentMenu == "gameplay" and self.gameInstance then
-        -- Passa eventos de teclado para o jogo
+        -- Pass keyboard events to game
         self.gameInstance:keypressed(key)
     elseif self.currentMenu == "gallery" and self.galleryPlayer and self.galleryPlayer.keypressed then
-        -- Passa eventos de teclado para a galeria
+        -- Pass keyboard events to gallery
         self.galleryPlayer:keypressed(key)
+    end
+end
+
+-- Handle window resize
+function Menu:resize(w, h)
+    -- Recreate current menu with new dimensions
+    if self.currentMenu == "main" then
+        self:loadMainMenu()
+    elseif self.currentMenu == "gallery" then
+        self:loadGalleryMenu()
+    elseif self.currentMenu == "settings" then
+        self:loadSettingsMenu()
+    end
+    
+    -- Notify game instance if it exists
+    if self.gameInstance and self.gameInstance.resize then
+        self.gameInstance:resize(w, h)
+    end
+    
+    -- Notify gallery if it exists
+    if self.galleryPlayer and self.galleryPlayer.resize then
+        self.galleryPlayer:resize(w, h)
     end
 end
 

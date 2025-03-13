@@ -1,15 +1,20 @@
 -- main.lua
 local Config = require "config"
 local Menu = require "menu"
+local ScreenUtils = require "screen_utils"
 
+-- Handle window resize
 function love.resize(w, h)
-    -- Notifica o menu sobre o redimensionamento
+    -- Update central screen dimensions
+    ScreenUtils.updateDimensions(w, h)
+    
+    -- Notify menu about resizing
     if menu then
         if menu.resize then
             menu:resize(w, h)
         end
         
-        -- Recarrega o menu apropriado
+        -- Reload appropriate menu
         if menu.loadMainMenu and menu.currentMenu then
             if menu.currentMenu == "main" then
                 menu:loadMainMenu()
@@ -23,14 +28,17 @@ function love.resize(w, h)
 end
 
 function love.load()
-    -- Carrega as configurações salvas (ex.: fullscreen, volume, etc.)
+    -- Initialize screen utilities
+    ScreenUtils.init()
+    
+    -- Load saved configurations
     Config.load()
     
-    -- Centraliza a janela
+    -- Set up initial window
     local screenWidth, screenHeight = love.window.getDesktopDimensions()
     local windowWidth, windowHeight = 1024, 768
     
-    -- Define configurações iniciais da janela
+    -- Configure window
     love.window.setMode(windowWidth, windowHeight, {
         resizable = true,
         vsync = true,
@@ -39,7 +47,10 @@ function love.load()
         fullscreen = Config.settings.fullscreen
     })
     
-    -- Centraliza a janela na tela (quando não estiver em fullscreen)
+    -- Update screen utils with initial dimensions
+    ScreenUtils.updateDimensions(windowWidth, windowHeight)
+    
+    -- Center window when not in fullscreen
     if not Config.settings.fullscreen then
         love.window.setPosition(
             (screenWidth - windowWidth) / 2,
@@ -47,12 +58,16 @@ function love.load()
         )
     end
     
-    -- Cria a instância do menu
+    -- Create menu instance
     menu = Menu.new()
+    
+    -- Set fallback font with good scaling
+    local fontSize = ScreenUtils.scaleFontSize(14)
+    local defaultFont = love.graphics.newFont(fontSize)
+    love.graphics.setFont(defaultFont)
 end
 
--- Função para definir a posição dos círculos para o jogo
--- Esta função permite definir a posição no Main para ter acesso global
+-- Function for setting game circle position (kept for compatibility)
 function love.setGameCirclePosition(ratioX, ratioY)
     if menu and menu.gameInstance then
         menu.gameInstance:setCirclePosition(ratioX, ratioY)
@@ -68,11 +83,15 @@ function love.draw()
 end
 
 function love.mousepressed(x, y, button, istouch, presses)
-    menu:mousepressed(x, y, button)
+    -- Transform coordinates if needed for UI
+    local uiX, uiY = ScreenUtils.screenToUICoordinates(x, y)
+    menu:mousepressed(uiX, uiY, button)
 end
 
 function love.mousereleased(x, y, button)
-    menu:mousereleased(x, y, button)
+    -- Transform coordinates if needed for UI
+    local uiX, uiY = ScreenUtils.screenToUICoordinates(x, y)
+    menu:mousereleased(uiX, uiY, button)
 end
 
 function love.keypressed(key, scancode, isrepeat)
@@ -80,20 +99,23 @@ function love.keypressed(key, scancode, isrepeat)
         menu:keypressed(key)
     end
     
-    -- Sair do jogo com Escape
+    -- Exit game with Shift+Escape
     if key == "escape" and love.keyboard.isDown("lshift") then
         love.event.quit()
     end
     
-    -- Alternar fullscreen com Alt+Enter ou F11
+    -- Toggle fullscreen with Alt+Enter or F11
     if (key == "return" and love.keyboard.isDown("lalt")) or key == "f11" then
         Config.setFullscreen(not Config.settings.fullscreen)
     end
 end
 
--- Adiciona tratamento para o evento de movimentação do mouse
+-- Handle mouse movement for hover effects
 function love.mousemoved(x, y, dx, dy)
+    -- Transform coordinates if needed for UI
+    local uiX, uiY = ScreenUtils.screenToUICoordinates(x, y)
+    
     if menu.mousemoved then
-        menu:mousemoved(x, y, dx, dy)
+        menu:mousemoved(uiX, uiY, dx, dy)
     end
 end

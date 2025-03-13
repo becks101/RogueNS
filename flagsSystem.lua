@@ -1,19 +1,22 @@
 -- flagsSystem.lua
--- Sistema para gerenciar flags, achievements e recompensas
+--[[ 
+    System for managing flags, achievements, and rewards.
+    Tracks game progress, unlocks content, and manages persistent state.
+]]
 
 local Save = require "save"
 
 local FlagsSystem = {}
 
--- Estado global do jogo para rastreamento de flags e achievements
+-- Global game state for flags and achievements tracking
 local GameState = {
-    itemsColetados = {},
-    nextFase = nil,
-    flagsAtivadas = {},
-    achievementsDesbloqueados = {}
+    itemsColetados = {},         -- Collected items
+    nextFase = nil,              -- Next level to load
+    flagsAtivadas = {},          -- Activated flags
+    achievementsDesbloqueados = {} -- Unlocked achievements
 }
 
--- Variáveis de jogo de ritmo que são monitoradas para condições
+-- Rhythm game variables monitored for conditions
 local RhythmGame = {
     bpm = 120,
     beatTime = 0,
@@ -41,54 +44,84 @@ local RhythmGame = {
     }
 }
 
--- Tipos de recompensas e suas funções de execução
+-- Reward types and their execution functions
 local AchievementType = {
+    -- Unlocks a stage scene
     stage_scene = function(reward) 
-        print("Desbloqueou nova cena de palco:", reward)
-        -- Implemente a lógica para ativar/desbloquear stage scenes
-        -- Exemplo: Notificar o gerenciador de galeria
+        print("Unlocked new stage scene:", reward)
+        -- Notify gallery manager
         if FlagsSystem.callbacks.onStageSceneUnlocked then
             FlagsSystem.callbacks.onStageSceneUnlocked(reward)
         end
     end,
     
+    -- Unlocks a cutscene
     cutscene = function(reward) 
-        print("Desbloqueou nova cutscene:", reward)
-        -- Implemente a lógica para ativar/desbloquear cutscenes
-        -- Exemplo: Notificar o gerenciador de galeria
+        print("Unlocked new cutscene:", reward)
+        -- Notify gallery manager
         if FlagsSystem.callbacks.onCutsceneUnlocked then
             FlagsSystem.callbacks.onCutsceneUnlocked(reward)
         end
     end,
     
+    -- Unlocks a level
     fase = function(reward) 
-        print("Desbloqueou nova fase:", reward)
+        print("Unlocked new level:", reward)
         GameState.nextFase = reward
-        -- Notifica callback se existir
+        -- Notify callback if exists
         if FlagsSystem.callbacks.onFaseUnlocked then
             FlagsSystem.callbacks.onFaseUnlocked(reward)
         end
     end,
     
+    -- Default handler for unknown types
     default = function(reward) 
-        print("[ERRO] Tipo de recompensa não implementado:", reward) 
+        print("[ERROR] Unimplemented reward type:", reward) 
     end
 }
 
--- Condições que podem ser verificadas para desbloquear achievements
+-- Condition checkers for achievements
 local Flags = {
     conditions = {
-        acertos_consecutivos = function(v) return RhythmGame.combo >= v end,
-        combo_maximo = function(v) return RhythmGame.maxCombo >= v end,
-        pontuacao_minima = function(v) return RhythmGame.score >= v end,
-        musica_terminada = function() return RhythmGame.finished end,
-        stamina_drained = function() return RhythmGame.terminationReason == "stamina" end,
-        complete_duration = function() return RhythmGame.terminationReason == "time" end,
-        has_item = function(i) return GameState.itemsColetados[i] and GameState.itemsColetados[i].quantidade > 0 end
+        -- Check if combo reaches value
+        acertos_consecutivos = function(v) 
+            return RhythmGame.combo >= v 
+        end,
+        
+        -- Check if max combo reaches value
+        combo_maximo = function(v) 
+            return RhythmGame.maxCombo >= v 
+        end,
+        
+        -- Check if score reaches value
+        pontuacao_minima = function(v) 
+            return RhythmGame.score >= v 
+        end,
+        
+        -- Check if music is finished
+        musica_terminada = function() 
+            return RhythmGame.finished 
+        end,
+        
+        -- Check if level ended due to stamina
+        stamina_drained = function() 
+            return RhythmGame.terminationReason == "stamina" 
+        end,
+        
+        -- Check if level completed full duration
+        complete_duration = function() 
+            return RhythmGame.terminationReason == "time" 
+        end,
+        
+        -- Check if player has item
+        has_item = function(i) 
+            return GameState.itemsColetados[i] and 
+                   GameState.itemsColetados[i].quantidade > 0 
+        end
     }
 }
 
--- Callbacks para integração com outros módulos
+-- Callbacks for integration with other modules
 FlagsSystem.callbacks = {
     onStageSceneUnlocked = nil,
     onCutsceneUnlocked = nil,
@@ -96,21 +129,26 @@ FlagsSystem.callbacks = {
     onAchievementUnlocked = nil
 }
 
--- Atualiza os dados do RhythmGame com base no Gameplay
+-- Updates rhythm game data from gameplay state
 function FlagsSystem.updateRhythmGameData(gameplay)
+    if not gameplay then return end
+    
+    -- Update core data
     RhythmGame.score = gameplay.getPontuacao()
     RhythmGame.combo = gameplay.getCombo()
     RhythmGame.maxCombo = math.max(RhythmGame.maxCombo, RhythmGame.combo)
     RhythmGame.comboMultiplier = gameplay.getMultiplicador()
     
-    -- Atualiza outros dados se disponíveis
+    -- Update time data if available
     if gameplay.getTempoDecorrido then
         RhythmGame.musicProgress = gameplay.getTempoDecorrido()
     end
 end
 
--- Reseta os dados do RhythmGame para uma nova fase
+-- Reset rhythm game data for a new level
 function FlagsSystem.resetRhythmGameData(level)
+    if not level then return end
+    
     RhythmGame.bpm = level.bpm or 120
     RhythmGame.stageName = level.nome or ""
     RhythmGame.rhythmName = level.nome or ""
@@ -123,31 +161,35 @@ function FlagsSystem.resetRhythmGameData(level)
     RhythmGame.terminationReason = "none"
 end
 
--- Verifica se um achievement específico deve ser desbloqueado
+-- Check if a specific achievement should be unlocked
 function FlagsSystem.checkAchievement(achievement)
-    -- Verifica se já foi desbloqueado
+    if not achievement or not achievement.id then 
+        return false 
+    end
+    
+    -- Skip if already unlocked
     if GameState.achievementsDesbloqueados[achievement.id] then
         return false
     end
     
-    -- Obtém a função de condição
+    -- Get condition function
     local conditionFunc = Flags.conditions[achievement.condition]
     if not conditionFunc then
-        print("[ERRO] Condição não implementada:", achievement.condition)
+        print("[ERROR] Unimplemented condition:", achievement.condition)
         return false
     end
     
-    -- Verifica se a condição é atendida
+    -- Check if condition is met
     if conditionFunc(achievement.value) then
-        -- Marca como desbloqueado
+        -- Mark as unlocked
         GameState.achievementsDesbloqueados[achievement.id] = true
         
-        -- Notifica sobre o desbloqueio
+        -- Notify about unlock
         if FlagsSystem.callbacks.onAchievementUnlocked then
             FlagsSystem.callbacks.onAchievementUnlocked(achievement.id)
         end
         
-        -- Aplica a recompensa
+        -- Apply reward
         local rewardFunc = AchievementType[achievement.reward_type] or AchievementType.default
         rewardFunc(achievement.reward_value)
         
@@ -157,7 +199,7 @@ function FlagsSystem.checkAchievement(achievement)
     return false
 end
 
--- Verifica todos os achievements de uma fase
+-- Check all achievements for a level
 function FlagsSystem.checkAllAchievements(fase)
     if not fase or not fase.achievements then
         return
@@ -168,7 +210,7 @@ function FlagsSystem.checkAllAchievements(fase)
     end
 end
 
--- Verifica apenas os achievements marcados para verificação em tempo real
+-- Check only real-time achievements
 function FlagsSystem.checkRealTimeAchievements(fase)
     if not fase or not fase.achievements then
         return
@@ -181,18 +223,18 @@ function FlagsSystem.checkRealTimeAchievements(fase)
     end
 end
 
--- Finaliza a fase atual e verifica todos os achievements
+-- Finalize current level and check achievements
 function FlagsSystem.finalizeFase(reason)
     RhythmGame.finished = true
     RhythmGame.terminationReason = reason or "time"
     
-    -- Retorna a próxima fase se houver
+    -- Return next level if available
     local nextFase = GameState.nextFase
     GameState.nextFase = nil
     return nextFase
 end
 
--- Salva o estado atual das flags e achievements
+-- Save current flags and achievements state
 function FlagsSystem.saveState()
     local saveData = {
         flags = GameState.flagsAtivadas,
@@ -203,7 +245,7 @@ function FlagsSystem.saveState()
     Save.saveFlags(saveData)
 end
 
--- Carrega o estado salvo de flags e achievements
+-- Load saved flags and achievements state
 function FlagsSystem.loadState()
     local savedData = Save.loadFlags()
     if savedData then
@@ -215,43 +257,49 @@ function FlagsSystem.loadState()
     return false
 end
 
--- Marca uma flag como ativada
+-- Set flag value
 function FlagsSystem.setFlag(flagName, value)
+    if not flagName then return end
     GameState.flagsAtivadas[flagName] = value or true
 end
 
--- Verifica se uma flag está ativada
+-- Get flag value
 function FlagsSystem.getFlag(flagName)
+    if not flagName then return false end
     return GameState.flagsAtivadas[flagName]
 end
 
--- Adiciona um item à coleção do jogador
+-- Add item to player's collection
 function FlagsSystem.addItem(itemId, quantidade)
+    if not itemId then return end
     quantidade = quantidade or 1
     
     if not GameState.itemsColetados[itemId] then
         GameState.itemsColetados[itemId] = { quantidade = quantidade }
     else
-        GameState.itemsColetados[itemId].quantidade = GameState.itemsColetados[itemId].quantidade + quantidade
+        GameState.itemsColetados[itemId].quantidade = 
+            GameState.itemsColetados[itemId].quantidade + quantidade
     end
 end
 
--- Verifica se o jogador tem um determinado item
+-- Check if player has an item
 function FlagsSystem.hasItem(itemId, quantidade)
+    if not itemId then return false end
     quantidade = quantidade or 1
-    return GameState.itemsColetados[itemId] and GameState.itemsColetados[itemId].quantidade >= quantidade
+    return GameState.itemsColetados[itemId] and 
+           GameState.itemsColetados[itemId].quantidade >= quantidade
 end
 
--- Retorna o estado atual do RhythmGame (útil para debugging)
+-- Get current rhythm game state (for debugging)
 function FlagsSystem.getRhythmGameState()
     return RhythmGame
 end
 
--- Reinicia o sistema
+-- Reset the system
 function FlagsSystem.reset()
     GameState.nextFase = nil
     
-    -- Reseta RhythmGame mas mantém flags e achievements
+    -- Reset rhythm game but keep flags and achievements
     RhythmGame.score = 0
     RhythmGame.combo = 0
     RhythmGame.maxCombo = 0

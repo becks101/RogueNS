@@ -1,46 +1,75 @@
--- galeryManager.lua (anteriormente stagescenegallery.lua)
+-- galeryManager.lua
+--[[
+    Gallery manager module that handles displaying and interacting with
+    different types of unlocked content:
+    - Stage scenes
+    - Cutscenes
+    - Items
+]]
+
 local StageScene = require("stagescenes")
 local Cutscenes = require("cutscenes")
 local ButtonTypes = require("button")
+local ScreenUtils = require("screen_utils")
 local GaleryIcons = ButtonTypes.GaleryIcons
 
 local GaleryManager = {}
 GaleryManager.__index = GaleryManager
 
+-- Creates a new gallery manager instance
 function GaleryManager.new()
     local self = setmetatable({}, GaleryManager)
-    self.currentTab = "stage" -- Padrão: abas de stage
     
-    -- Listas de itens por categoria
+    -- Initialize with default tab
+    self.currentTab = "stage"
+    
+    -- Content lists by category
     self.stageScenesList = {"stages/ss_mast01"}
     self.cutscenesList = {"cutscenes/intro", "cutscenes/chapter1"}
     self.itemsList = {"items/item1", "items/item2"}
     
     self.icons = {}
-    self.currentScene = nil -- Armazena a cena ativa (stage scene ou cutscene)
-    self.sceneType = nil -- Tipo da cena atual ("stage" ou "cutscene")
+    self.currentScene = nil -- Currently active scene (stage scene or cutscene)
+    self.sceneType = nil    -- Type of current scene ("stage" or "cutscene")
     
-    -- Botão de voltar para retornar da visualização
-    self.backButton = ButtonTypes.Button.new(20, 20, 100, 40, "Voltar", function()
-        self.currentScene = nil
-        self.sceneType = nil
-    end)
+    -- Back button for returning from content view
+    local backBtnWidth, backBtnHeight = ScreenUtils.getUIElementSize(100, 40)
+    self.backButton = ButtonTypes.Button.new(
+        ScreenUtils.scaleValue(20), 
+        ScreenUtils.scaleValue(20), 
+        backBtnWidth, 
+        backBtnHeight, 
+        "Voltar", 
+        function()
+            self.currentScene = nil
+            self.sceneType = nil
+        end
+    )
     
+    -- Populate initial icons
     self:refreshIcons()
+    
     return self
 end
 
+-- Refreshes icons based on current tab selection
 function GaleryManager:refreshIcons()
-    self.icons = {} -- Resetar ícones
+    self.icons = {} -- Reset icons
     
-    local screenWidth, screenHeight = love.graphics.getDimensions()
-    local startX = 50
-    local startY = 150
-    local spacingX = 120
-    local spacingY = 120
-    local cols = math.max(1, math.floor((screenWidth - 100) / spacingX))
+    -- Calculate icon dimensions and spacing
+    local iconSize = ScreenUtils.scaleValue(80)
+    local spacingX = ScreenUtils.scaleValue(120)
+    local spacingY = ScreenUtils.scaleValue(120)
+    local startY = ScreenUtils.scaleValue(150)
     
-    -- Lista de itens atual com base na aba selecionada
+    -- Get number of columns based on screen width
+    local cols = ScreenUtils.getGridColumns(iconSize, spacingX, 2, 6)
+    
+    -- Calculate starting X to center the grid
+    local gridWidth = cols * spacingX
+    local startX = (ScreenUtils.width - gridWidth) / 2 + spacingX/2
+    
+    -- Get current content list based on active tab
     local currentList = {}
     if self.currentTab == "stage" then
         currentList = self.stageScenesList
@@ -50,110 +79,144 @@ function GaleryManager:refreshIcons()
         currentList = self.itemsList
     end
     
-    -- Criação de ícones para a lista atual
+    -- Create icons for current list items
     for i, moduleName in ipairs(currentList) do
         local col = (i - 1) % cols
         local row = math.floor((i - 1) / cols)
-        local x = startX + col * spacingX
-        local y = startY + row * spacingY
         
-        -- Tenta carregar o módulo para obter os dados
+        -- Calculate grid position
+        local x, y = ScreenUtils.gridPosition(col, row, iconSize, iconSize, spacingX, startX, startY)
+        
+        -- Try to load module data
         local success, itemData = pcall(require, moduleName)
         if success then
-            -- Certifique-se de que o caminho do IconeLarge existe
+            -- Ensure icon path exists or use default
             local iconPath = itemData.IconeLarge or "assets/icons/default.png"
             
-            -- Verifica se o arquivo do ícone existe
+            -- Verify icon file exists
             local fileInfo = love.filesystem.getInfo(iconPath)
             if not fileInfo then
-                print("Aviso: Ícone não encontrado: " .. iconPath)
-                iconPath = "assets/icons/default.png" -- Use um ícone padrão
+                print("Warning: Icon not found: " .. iconPath)
+                iconPath = "assets/icons/default.png" -- Use default icon
             end
             
+            -- Create icon with appropriate callback
             local icon = GaleryIcons.new(
                 x, y,
                 iconPath,
-                itemData.nome or "Item sem nome",
+                itemData.nome or "Unnamed item",
                 function()
-                    -- Callback diferente com base no tipo de conteúdo
+                    -- Different behavior based on content type
                     if self.currentTab == "stage" then
-                        self.currentScene = StageScene.new(moduleName)
-                        self.sceneType = "stage"
-                        if not self.currentScene:load() then
-                            print("Erro ao carregar stage scene:", moduleName)
-                            self.currentScene = nil
-                            self.sceneType = nil
-                        end
+                        self:loadStageScene(moduleName)
                     elseif self.currentTab == "cutscenes" then
-                        self.currentScene = Cutscenes.new(moduleName)
-                        self.sceneType = "cutscene"
-                        if not self.currentScene:load() then
-                            print("Erro ao carregar cutscene:", moduleName)
-                            self.currentScene = nil
-                            self.sceneType = nil
-                        end
+                        self:loadCutscene(moduleName)
                     elseif self.currentTab == "items" then
-                        -- Para itens, poderia mostrar apenas uma imagem e texto
-                        -- ou implementar um visualizador de item no futuro
-                        print("Visualizador de item não implementado ainda")
+                        print("Item viewer not implemented yet")
                     end
                 end
             )
+            
+            -- Apply scaling based on screen size
+            icon.normalScale = ScreenUtils.scale * 0.8
+            icon.hoverScale = icon.normalScale * 1.1
+            icon.currentScale = icon.normalScale
+            
             table.insert(self.icons, icon)
         else
-            print("Erro ao carregar item:", moduleName, itemData)
+            print("Error loading item:", moduleName, itemData)
         end
     end
 end
 
+-- Loads a stage scene
+function GaleryManager:loadStageScene(moduleName)
+    self.currentScene = StageScene.new(moduleName)
+    self.sceneType = "stage"
+    
+    if not self.currentScene:load() then
+        print("Error loading stage scene:", moduleName)
+        self.currentScene = nil
+        self.sceneType = nil
+        return false
+    end
+    
+    return true
+end
+
+-- Loads a cutscene
+function GaleryManager:loadCutscene(moduleName)
+    self.currentScene = Cutscenes.new(moduleName)
+    self.sceneType = "cutscene"
+    
+    if not self.currentScene:load() then
+        print("Error loading cutscene:", moduleName)
+        self.currentScene = nil
+        self.sceneType = nil
+        return false
+    end
+    
+    return true
+end
+
+-- Updates gallery state
 function GaleryManager:update(dt)
-    -- Update the state of hover for all icons
+    -- Get mouse position for hover calculations
     local mx, my = love.mouse.getPosition()
     
     if self.currentScene then
+        -- Update active scene if any
         if self.currentScene.update then
             self.currentScene:update(dt)
         end
+        
+        -- Update back button hover state
         self.backButton:updateHover(mx, my)
     else
-        -- Update hover and timers for the icons when not viewing a scene
+        -- Update icons when not viewing a scene
         for _, icon in ipairs(self.icons) do
             if icon.updateHover then
                 icon:updateHover(mx, my)
             end
             
-            -- Call the new update method to handle timers
+            -- Update animation timers if implemented
             if icon.update then
                 icon:update(dt)
             end
         end
     end
 end
+
+-- Draws the gallery
 function GaleryManager:draw()
     if self.currentScene then
+        -- Draw active scene
         if self.currentScene.draw then
             self.currentScene:draw()
         end
+        
+        -- Always draw back button over scene
         self.backButton:draw()
     else
-        -- Desenha os ícones da galeria
+        -- Draw gallery icons
         for _, icon in ipairs(self.icons) do
             icon:draw()
         end
     end
 end
 
+-- Handles mouse press events
 function GaleryManager:mousepressed(x, y, button)
     if self.currentScene then
-        -- Apenas o botão "Voltar" está ativo durante a visualização da cena
+        -- Only back button is active during scene viewing
         self.backButton:mousepressed(x, y, button)
         
-        -- Também passa o evento para a cena atual se ela precisar
+        -- Pass event to cutscene if needed
         if self.sceneType == "cutscene" and self.currentScene.mousepressed then
             self.currentScene:mousepressed(x, y, button)
         end
     else
-        -- Processa cliques nos ícones da galeria
+        -- Process gallery icon clicks
         for _, icon in ipairs(self.icons) do
             if icon.mousepressed then
                 icon:mousepressed(x, y, button)
@@ -162,20 +225,38 @@ function GaleryManager:mousepressed(x, y, button)
     end
 end
 
+-- Handles mouse release events
 function GaleryManager:mousereleased(x, y, button)
-    if self.currentScene then
-        if self.currentScene.mousereleased then
-            self.currentScene:mousereleased(x, y, button)
+    if self.currentScene and self.currentScene.mousereleased then
+        self.currentScene:mousereleased(x, y, button)
+    end
+end
+
+-- Handles keyboard events
+function GaleryManager:keypressed(key)
+    if self.currentScene and self.sceneType == "cutscene" then
+        -- Cutscenes need keyboard events to advance
+        if self.currentScene.keypressed then
+            self.currentScene:keypressed(key)
         end
     end
 end
 
-function GaleryManager:keypressed(key)
-    if self.currentScene and self.sceneType == "cutscene" then
-        -- As cutscenes precisam de eventos de teclado para avançar
-        if self.currentScene.keypressed then
-            self.currentScene:keypressed(key)
-        end
+-- Handle window resize
+function GaleryManager:resize(w, h)
+    -- Update back button position
+    local backBtnWidth, backBtnHeight = ScreenUtils.getUIElementSize(100, 40)
+    self.backButton.x = ScreenUtils.scaleValue(20)
+    self.backButton.y = ScreenUtils.scaleValue(20)
+    self.backButton.width = backBtnWidth
+    self.backButton.height = backBtnHeight
+    
+    -- Refresh icons with new screen dimensions
+    self:refreshIcons()
+    
+    -- Notify currentScene about resize if it supports it
+    if self.currentScene and self.currentScene.resize then
+        self.currentScene:resize(w, h)
     end
 end
 

@@ -1,111 +1,128 @@
--- game.lua - Modificado para usar o novo sistema de gameplay
-local Game = {}
-Game.__index = Game
+-- game.lua
+--[[
+    Central game manager that handles loading levels, updating game state,
+    and coordinating between different game systems.
+]]
+
+local ScreenUtils = require "screen_utils"
 local FlagsSystem = require "flagsSystem"
 local Gameplay = require "gameplay"
 local Config = require "config"
 
+local Game = {}
+Game.__index = Game
+
+-- Creates a new game instance
 function Game.new()
     local self = setmetatable({}, Game)
-    self.state = "menu"  -- Estados possíveis: "menu", "playing", "paused"
+    self.state = "menu"  -- States: "menu", "playing", "paused"
     self.currentLevel = nil
     
-    -- Dimensões do jogo
-    self.screenWidth, self.screenHeight = love.graphics.getDimensions()
+    -- Positioning configuration
+    self.positionRatioX = 0.5  -- 50% of screen width
+    self.positionRatioY = 0.5  -- 50% of screen height
     
-    -- Configuração de posicionamento
-    self.positionRatioX = 0.5  -- 50% da largura da tela
-    self.positionRatioY = 0.5  -- 50% da altura da tela
+    -- Calculate game dimensions
+    self:calculateDimensions()
     
-    -- Configura callbacks do sistema de flags
-    FlagsSystem.callbacks.onStageSceneUnlocked = function(sceneId)
-        -- Adicionar lógica para desbloquear uma stage scene na galeria
-        print("Stage scene desbloqueada: " .. sceneId)
-    end
+    -- Configure callbacks for flag system
+    self:setupCallbacks()
     
-    FlagsSystem.callbacks.onCutsceneUnlocked = function(cutsceneId)
-        -- Adicionar lógica para desbloquear uma cutscene na galeria
-        print("Cutscene desbloqueada: " .. cutsceneId)
-    end
-    
-    FlagsSystem.callbacks.onFaseUnlocked = function(faseId)
-        -- Adicionar lógica para desbloquear uma fase
-        print("Fase desbloqueada: " .. faseId)
-    end
-    
-    -- Calcula dimensões da área de jogo com posicionamento proporcional para ambos os modos
-    local minGameWidth = 160  -- Largura mínima em pixels 
-    local maxGameWidth = 200  -- Largura máxima em pixels
-    
-    -- Cálculo proporcional com limites
-    self.gameWidth = math.max(minGameWidth, math.min(self.screenWidth * 0.15, maxGameWidth))
-    self.gameHeight = self.screenHeight - 20  -- Quase toda a altura com margem pequena
-    
-    -- Posiciona à direita com margem fixa de pixels
-    self.gameOffsetX = self.screenWidth - self.gameWidth - 20  -- 20 pixels de margem à direita
-    self.gameOffsetY = 10  -- 10 pixels de margem superior
-    
-    -- Inicializa o gameplay com essas dimensões
+    -- Initialize gameplay with dimensions
     Gameplay.setDimensoes(self.gameWidth, self.gameHeight)
     Gameplay.setOffset(self.gameOffsetX, self.gameOffsetY)
+    Gameplay.init() -- Make sure gameplay dimensions are initialized
     
-    -- Carrega estado salvo de flags e achievements
+    -- Load saved state
     FlagsSystem.loadState()
     
     return self
 end
 
--- Permite configurar o posicionamento do centro do jogo
+-- Calculates game dimensions based on screen size
+function Game:calculateDimensions()
+    -- Fixed constraints for game area
+    local minGameWidth = 160  -- Minimum width in pixels 
+    local maxGameWidth = 200  -- Maximum width in pixels
+    
+    -- Calculate proportional width with limits
+    self.gameWidth = math.max(minGameWidth, math.min(ScreenUtils.width * 0.15, maxGameWidth))
+    
+    -- Calculate height with margin
+    self.gameHeight = ScreenUtils.height - 20
+    
+    -- Position at right side with fixed margin
+    self.gameOffsetX = ScreenUtils.width - self.gameWidth - 20
+    self.gameOffsetY = 10
+end
+
+-- Sets up flag system callbacks
+function Game:setupCallbacks()
+    FlagsSystem.callbacks.onStageSceneUnlocked = function(sceneId)
+        -- Logic for unlocking stage scene in gallery
+        print("Stage scene unlocked: " .. sceneId)
+    end
+    
+    FlagsSystem.callbacks.onCutsceneUnlocked = function(cutsceneId)
+        -- Logic for unlocking cutscene in gallery
+        print("Cutscene unlocked: " .. cutsceneId)
+    end
+    
+    FlagsSystem.callbacks.onFaseUnlocked = function(faseId)
+        -- Logic for unlocking level
+        print("Level unlocked: " .. faseId)
+    end
+end
+
+-- Sets the position of the game circle (compatibility function)
 function Game:setCirclePosition(ratioX, ratioY)
     self.positionRatioX = ratioX
     self.positionRatioY = ratioY
-    
-    -- Não afeta mais o posicionamento do gameplay, mantido para compatibilidade
-    -- O gameplay agora tem posição fixa na direita da tela
 end
 
--- Carrega um nível
+-- Loads a level
 function Game:loadLevel(levelModule)
-    -- Remove a extensão .lua se ela já estiver presente no nome do arquivo
+    -- Remove file extension if present
     local moduleName = levelModule
     if levelModule:sub(-4) == ".lua" then
-        moduleName = levelModule:sub(1, -5)  -- Remove a extensão .lua
+        moduleName = levelModule:sub(1, -5)
     end
     
+    -- Try to load level module
     local success, level = pcall(require, moduleName)
     if not success then
-        print("Erro ao carregar fase:", moduleName, level)
+        print("Error loading level:", moduleName, level)
         return false
     end
     
     self.currentLevel = level
     
-    -- Configura parâmetros adicionais para o novo gameplay
+    -- Configure additional parameters if needed
     if not level.velocidade then
-        -- Configura velocidade baseada no BPM se não estiver definida
+        -- Set velocity based on BPM if not defined
         level.velocidade = (level.bpm or 90) * 2
     end
     
     if not level.intervalo then
-        -- Calcula intervalo baseado no BPM (60/BPM = duração de um beat em segundos)
+        -- Calculate interval based on BPM (60/BPM = duration of one beat in seconds)
         level.intervalo = 60 / (level.bpm or 90)
     end
     
-    -- Adiciona dificuldade baseada no BPM se não estiver definida
+    -- Add difficulty based on BPM if not defined
     if not level.dificuldade then
         level.dificuldade = math.floor((level.bpm or 90) / 30)
     end
     
-    -- Reseta dados de jogo no sistema de flags
+    -- Reset game data in flag system
     FlagsSystem.resetRhythmGameData(level)
     
-    -- Carrega a fase no gameplay
+    -- Load level in gameplay
     Gameplay.carregar(level)
     self.state = "playing"
     
-    -- Inicia a animação inicial se definida
+    -- Load initial animation if defined
     if level.animation then
-        -- Carrega a stage scene da animação inicial
+        -- Load stage scene for initial animation
         local StageScene = require "stagescenes"
         self.stageScene = StageScene.new(level.animation)
         self.stageScene:load()
@@ -114,32 +131,33 @@ function Game:loadLevel(levelModule)
     return true
 end
 
+-- Updates game state
 function Game:update(dt)
     if self.state == "playing" then
-        -- Se tiver uma animação em execução, atualize-a primeiro
+        -- Update animation if active
         if self.stageScene then
             self.stageScene:update(dt)
         end
         
-        -- Atualiza dados do sistema de flags com informações do gameplay
+        -- Update flag system with gameplay data
         FlagsSystem.updateRhythmGameData(Gameplay)
         
-        -- Verifica achievements em tempo real
+        -- Check real-time achievements
         if self.currentLevel then
             FlagsSystem.checkRealTimeAchievements(self.currentLevel)
         end
         
-        -- Atualiza o gameplay
+        -- Update gameplay
         local result = Gameplay.atualizar(dt, 0)
         
-        -- Verifica se a fase foi concluída
+        -- Check if level is completed
         if result == "fase_concluida" then
-            -- Finaliza o jogo e verifica todos os achievements
+            -- Finalize level and check achievements
             local nextFase = FlagsSystem.finalizeFase("time")
             FlagsSystem.checkAllAchievements(self.currentLevel)
             FlagsSystem.saveState()
             
-            -- Carrega próxima fase ou volta para o menu
+            -- Load next level or return to menu
             if nextFase then
                 self:loadLevel("levels/" .. nextFase)
                 return "fase_carregada"
@@ -153,34 +171,37 @@ function Game:update(dt)
     return self.state
 end
 
+-- Draws the game
 function Game:draw()
     if self.state == "playing" then
-        -- Desenha a stage scene primeiro como background ocupando a tela inteira
+        -- Draw stage scene first as background
         if self.stageScene then
-            -- Sem scissor para permitir que ocupe toda a tela
             self.stageScene:draw()
         end
         
-        -- Depois desenha o gameplay como overlay na área direita designada
-        Gameplay.desenhar(true) -- true para desenhar UI
+        -- Then draw gameplay overlay in right area
+        Gameplay.desenhar(true) -- true to draw UI
     end
 end
 
+-- Handles key presses
 function Game:keypressed(key)
     if self.state == "playing" then
         if key == "escape" then
             self.state = "menu"
         else
-            -- Passa as teclas para o gameplay
+            -- Pass keys to gameplay
             Gameplay.keypressed(key)
         end
     end
 end
 
+-- Handles mouse presses
 function Game:mousepressed(x, y, button)
-    -- Implementação futura se necessário
+    -- Future implementation if needed
 end
 
+-- Pauses the game
 function Game:pause()
     if self.state == "playing" then
         self.state = "paused"
@@ -188,6 +209,7 @@ function Game:pause()
     end
 end
 
+-- Resumes the game
 function Game:resume()
     if self.state == "paused" then
         self.state = "playing"
@@ -195,55 +217,41 @@ function Game:resume()
     end
 end
 
--- Chamada quando a janela é redimensionada
+-- Handles window resize
 function Game:resize(w, h)
-    -- Atualiza as dimensões
-    self.screenWidth = w
-    self.screenHeight = h
+    -- Update dimensions
+    self:calculateDimensions()
     
-    -- Recalcula com valores fixos em pixels ao invés de proporções
-    local minGameWidth = 160  -- Largura mínima em pixels 
-    local maxGameWidth = 200  -- Largura máxima em pixels
-    
-    -- Cálculo proporcional com limites
-    self.gameWidth = math.max(minGameWidth, math.min(self.screenWidth * 0.15, maxGameWidth))
-    self.gameHeight = self.screenHeight - 20  -- Quase toda a altura com margem pequena
-    
-    -- Posiciona à direita com margem fixa de pixels
-    self.gameOffsetX = self.screenWidth - self.gameWidth - 20  -- 20 pixels de margem à direita
-    self.gameOffsetY = 10  -- 10 pixels de margem superior
-    
-    -- Atualiza o gameplay
+    -- Update gameplay
     Gameplay.setDimensoes(self.gameWidth, self.gameHeight)
     Gameplay.setOffset(self.gameOffsetX, self.gameOffsetY)
+    Gameplay.onResize()
     
-    -- Notifica o sistema de que o tamanho da tela mudou
+    -- Update stage scene if active
     if self.stageScene and self.stageScene.resize then
         self.stageScene:resize(w, h)
     end
-    
-    -- Notifica o gameplay sobre o redimensionamento
-    Gameplay.onResize()
 end
 
--- Implementa os métodos do Game para criar fases, compatível com o novo gameplay
--- Retorna um novo criador de níveis
+-- Static functions for level creation
+
+-- Creates a new level creator
 function Game.newLevelCreator(larguraTela, alturaTela)
     local levelCreator = {}
     
-    -- Dimensões da tela para referência
+    -- Screen dimensions for reference
     levelCreator.larguraTela = larguraTela
     levelCreator.alturaTela = alturaTela
     
-    -- Definições padrões para fases
+    -- Default colors for levels
     levelCreator.cores = {
-        {0.92, 0.7, 0.85},  -- Rosa pastel suave
-        {0.7, 0.9, 0.8},    -- Verde mint pastel
-        {0.7, 0.8, 0.95},   -- Azul céu pastel
-        {0.97, 0.9, 0.7}    -- Amarelo pastel suave
+        {0.92, 0.7, 0.85},  -- Soft pastel pink
+        {0.7, 0.9, 0.8},    -- Mint pastel green
+        {0.7, 0.8, 0.95},   -- Sky blue pastel
+        {0.97, 0.9, 0.7}    -- Soft pastel yellow
     }
     
-    -- As 4 posições possíveis para os blocos
+    -- Calculate X positions for blocks
     levelCreator.posicoesX = {
         larguraTela * 0.2,
         larguraTela * 0.4, 
@@ -251,34 +259,34 @@ function Game.newLevelCreator(larguraTela, alturaTela)
         larguraTela * 0.8
     }
     
-    -- Cria uma nova fase com configurações específicas
+    -- Creates a new level with specific configuration
     levelCreator.createLevel = function(config)
         local nivel = {}
         
-        -- Configurações de dificuldade
+        -- Difficulty settings
         nivel.dificuldade = config.dificuldade or 1
         nivel.velocidade = config.velocidade or 200
         nivel.intervalo = config.intervalo or 1.0
-        nivel.nome = config.nome or "Fase sem nome"
+        nivel.nome = config.nome or "Unnamed level"
         nivel.duracao = config.duracao or 60
         
-        -- Posições dos blocos
+        -- Block positions
         nivel.posicoesX = config.posicoesX or levelCreator.posicoesX
         
-        -- Cores dos blocos
+        -- Block colors
         nivel.cores = config.cores or levelCreator.cores
         
-        -- Padrões de blocos
+        -- Block patterns
         nivel.padroes = config.padroes or levelCreator.gerarPadroesAleatorios(nivel.dificuldade)
         
         return nivel
     end
     
-    -- Gera padrões aleatórios de blocos baseados na dificuldade
+    -- Generates random block patterns based on difficulty
     levelCreator.gerarPadroesAleatorios = function(dificuldade)
         local padroes = {}
         
-        -- Quanto maior a dificuldade, mais padrões complexos
+        -- More patterns for higher difficulty
         local numPadroes = 5 + dificuldade * 2
         
         for i = 1, numPadroes do
@@ -289,7 +297,7 @@ function Game.newLevelCreator(larguraTela, alturaTela)
                 table.insert(padrao, {
                     posicao = math.random(1, 4),
                     cor = math.random(1, 4),
-                    tempo = j * (0.8 - dificuldade * 0.1) -- Intervalo vai diminuindo com a dificuldade
+                    tempo = j * (0.8 - dificuldade * 0.1) -- Decreasing interval with difficulty
                 })
             end
             
@@ -302,86 +310,85 @@ function Game.newLevelCreator(larguraTela, alturaTela)
     return levelCreator
 end
 
--- Retorna um novo gerador de fases
+-- Creates a new phase generator
 function Game.newPhaseGenerator()
     local phaseGenerator = {}
     
-    -- Gera uma seed aleatória para a run atual com 9 dígitos
+    -- Generate random run seed with 9 digits
     phaseGenerator.runSeed = math.random(100000000, 999999999)
     
-    -- Diretório onde as definições de fase estão armazenadas
+    -- Directory for level definitions
     phaseGenerator.levelsDirectory = "levels/"
     
-    -- Cache de fases carregadas
+    -- Cache for loaded levels
     phaseGenerator.loadedPhases = {}
     
-    -- Define uma nova seed para a run atual
+    -- Sets a new run seed
     phaseGenerator.setRunSeed = function(seed)
         phaseGenerator.runSeed = seed
     end
     
-    -- Obtém a seed da run atual
+    -- Gets current run seed
     phaseGenerator.getRunSeed = function()
         return phaseGenerator.runSeed
     end
     
-    -- Carrega uma definição de fase de um arquivo
+    -- Loads a phase definition from file
     phaseGenerator.loadPhaseDefinition = function(phaseName)
-        -- Verifica se a fase já está em cache
+        -- Check if phase is already cached
         if phaseGenerator.loadedPhases[phaseName] then
             return phaseGenerator.loadedPhases[phaseName]
         end
         
-        -- Caminho para o arquivo de definição da fase
+        -- Path to phase definition file
         local filePath = phaseGenerator.levelsDirectory .. phaseName .. ".lua"
         
-        -- Tenta carregar o arquivo
+        -- Try to load the file
         local success, phaseDefinition = pcall(function()
             return love.filesystem.load(filePath)()
         end)
         
         if success then
-            -- Armazena em cache para uso futuro
+            -- Cache for future use
             phaseGenerator.loadedPhases[phaseName] = phaseDefinition
             return phaseDefinition
         else
-            print("Erro ao carregar definição de fase: " .. phaseName)
-            print(phaseDefinition) -- Imprime o erro
+            print("Error loading phase definition: " .. phaseName)
+            print(phaseDefinition) -- Print error
             return nil
         end
     end
     
-    -- Gera uma fase com base na definição de fase e seed da run
+    -- Generates a phase based on definition and run seed
     phaseGenerator.generatePhase = function(levelCreator, phaseName)
-        -- Carrega a definição da fase
+        -- Load phase definition
         local phaseDefinition = phaseGenerator.loadPhaseDefinition(phaseName)
         if not phaseDefinition then
-            print("Fase não encontrada: " .. phaseName)
+            print("Phase not found: " .. phaseName)
             return nil
         end
         
-        -- Se a fase_seed não estiver definida, cria uma com base no nome da fase
+        -- Create phase seed if not defined
         if not phaseDefinition.fase_seed then
             local hash = 0
             for i = 1, #phaseName do
                 hash = (hash * 31 + string.byte(phaseName, i)) % 1000000000
             end
             phaseDefinition.fase_seed = hash
-            print("Seed automática criada para " .. phaseName .. ": " .. hash)
+            print("Auto-generated seed for " .. phaseName .. ": " .. hash)
         end
         
-        -- Combina a seed da fase com a seed da run para criar uma seed única
+        -- Combine phase seed with run seed for unique result
         local combinedSeed = phaseDefinition.fase_seed * phaseGenerator.runSeed
         math.randomseed(combinedSeed)
         
-        -- Calcula a velocidade dos blocos com base no BPM
+        -- Calculate block velocity based on BPM
         local velocidade = phaseDefinition.bpm * 2
         
-        -- Calcula o intervalo entre blocos (em segundos) com base no BPM
-        -- 60 / BPM = duração de um beat em segundos
+        -- Calculate interval between blocks based on BPM
         local intervalo = 60 / phaseDefinition.bpm
         
-        -- Cria configurações para o levelCreator
+        -- Create configuration for level creator
         local config = {
             velocidade = phaseDefinition.velocidade or velocidade,
             intervalo = phaseDefinition.intervalo or intervalo,
@@ -391,46 +398,46 @@ function Game.newPhaseGenerator()
             cores = phaseDefinition.cores
         }
         
-        -- Usa o levelCreator para criar o nível com as configurações calculadas
+        -- Create level with calculated configuration
         local nivel = levelCreator.createLevel(config)
         
-        -- Adiciona metadados da fase ao nível
+        -- Add phase metadata to level
         nivel.phaseDefinition = phaseDefinition
         nivel.phaseName = phaseName
         nivel.phaseSeed = phaseDefinition.fase_seed
         nivel.runSeed = phaseGenerator.runSeed
         nivel.combinedSeed = combinedSeed
         
-        -- Copia os dados originais da fase para compatibilidade com o sistema antigo
+        -- Copy original phase data for compatibility
         nivel.bpm = phaseDefinition.bpm
         nivel.duracao = phaseDefinition.duracao
         nivel.animation = phaseDefinition.animation
         nivel.achievements = phaseDefinition.achievements
         
-        -- Restaura a seed aleatória
+        -- Restore random seed
         math.randomseed(os.time())
         
         return nivel
     end
     
-    -- Lista todas as fases disponíveis no diretório de levels
+    -- Lists all available phases in levels directory
     phaseGenerator.listAvailablePhases = function()
         local phases = {}
         
-        -- Verifica se o diretório existe
+        -- Check if directory exists
         local info = love.filesystem.getInfo(phaseGenerator.levelsDirectory)
         if not info or info.type ~= "directory" then
-            -- Cria o diretório se não existir
+            -- Create directory if it doesn't exist
             love.filesystem.createDirectory(phaseGenerator.levelsDirectory)
             return phases
         end
         
-        -- Lista todos os arquivos no diretório
+        -- List all files in directory
         local files = love.filesystem.getDirectoryItems(phaseGenerator.levelsDirectory)
         for _, file in ipairs(files) do
-            -- Verifica se é um arquivo Lua
+            -- Check if it's a Lua file
             if file:match("%.lua$") then
-                -- Remove a extensão .lua
+                -- Remove .lua extension
                 local phaseName = file:gsub("%.lua$", "")
                 table.insert(phases, phaseName)
             end
@@ -439,7 +446,7 @@ function Game.newPhaseGenerator()
         return phases
     end
     
-    -- Cria um arquivo de fase de exemplo se não existir nenhum
+    -- Creates an example phase file if none exist
     phaseGenerator.createExamplePhase = function()
         local examplePath = phaseGenerator.levelsDirectory .. "ExemploDeFase01.lua"
         local info = love.filesystem.getInfo(examplePath)
@@ -447,41 +454,41 @@ function Game.newPhaseGenerator()
         if not info then
             local content = [[
 -- ExemploDeFase01.lua
--- Exemplo de fase para o jogo de ritmo no novo sistema
+-- Example phase for rhythm game
 
 local fase = {
     nome = "Tutorial 01",
-    bpm = 90,      -- Define a velocidade base (beats per minute)
-    duracao = 50,  -- Duração da fase em segundos
-    fase_seed = 13312212,  -- Seed usada para geração de padrões
+    bpm = 90,      -- Base speed (beats per minute)
+    duracao = 50,  -- Phase duration in seconds
+    fase_seed = 13312212,  -- Seed for pattern generation
     
-    -- Parâmetros específicos do novo sistema
-    velocidade = 180,  -- Velocidade de queda dos blocos
-    intervalo = 0.7,   -- Intervalo entre blocos em segundos
-    dificuldade = 1,   -- Nível de dificuldade
+    -- System-specific parameters
+    velocidade = 180,  -- Block fall speed
+    intervalo = 0.7,   -- Interval between blocks in seconds
+    dificuldade = 1,   -- Difficulty level
     
-    -- Cores customizadas (opcional)
+    -- Custom colors (optional)
     cores = {
-        {0.92, 0.7, 0.85},  -- Rosa pastel suave
-        {0.7, 0.9, 0.8},    -- Verde mint pastel
-        {0.7, 0.8, 0.95},   -- Azul céu pastel
-        {0.97, 0.9, 0.7}    -- Amarelo pastel suave
+        {0.92, 0.7, 0.85},  -- Soft pastel pink
+        {0.7, 0.9, 0.8},    -- Mint pastel green
+        {0.7, 0.8, 0.95},   -- Sky blue pastel
+        {0.97, 0.9, 0.7}    -- Soft pastel yellow
     },
     
-    -- Animação inicial do tutorial
+    -- Initial tutorial animation
     animation = "stages/ss_mast01",
     
-    -- Achievements do tutorial (mais fáceis)
+    -- Tutorial achievements (easier)
     achievements = {
         {
-            id = "Primeira Fase Completa",
+            id = "First Completed Phase",
             condition = "musica_terminada",
             value = true,
             reward_type = "fase",
             reward_value = "exemploDeFase01"
         },
         {
-            id = "Primeiros Passos",
+            id = "First Steps",
             condition = "pontuacao_minima",
             value = 100,
             reward_type = "cutscene",
@@ -493,11 +500,11 @@ local fase = {
 return fase
 ]]
             love.filesystem.write(examplePath, content)
-            print("Fase de exemplo criada em: " .. examplePath)
+            print("Example phase created at: " .. examplePath)
         end
     end
     
-    -- Gera uma nova seed aleatória para a run
+    -- Generates a new random run seed
     phaseGenerator.generateNewRunSeed = function()
         phaseGenerator.runSeed = math.random(100000000, 999999999)
         return phaseGenerator.runSeed
@@ -506,17 +513,17 @@ return fase
     return phaseGenerator
 end
 
--- Funções de formatação de seed para exibição
+-- Formats a seed for display
 function Game.formatSeed(seed)
     local seedStr = tostring(seed)
     local formatted = ""
     
-    -- Adiciona zeros à esquerda se necessário para garantir 9 dígitos
+    -- Add leading zeros to ensure 9 digits
     while #seedStr < 9 do
         seedStr = "0" .. seedStr
     end
     
-    -- Formata como XXX-XXX-XXX para melhor leitura
+    -- Format as XXX-XXX-XXX for readability
     formatted = string.sub(seedStr, 1, 3) .. "-" .. 
                 string.sub(seedStr, 4, 6) .. "-" .. 
                 string.sub(seedStr, 7, 9)
