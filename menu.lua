@@ -17,6 +17,11 @@ function Menu:loadMainMenu()
     self.currentMenu = "main"
     self.galleryPlayer = nil
     
+    -- Limpa o cache de fontes ao mudar de menu
+    if ScreenUtils.clearFontCache then
+        ScreenUtils.clearFontCache()
+    end
+    
     -- Fixed button sizes - will be scaled by screen utils
     local baseButtonWidth = 200
     local baseButtonHeight = 50
@@ -86,6 +91,9 @@ end
 function Menu:loadGalleryMenu()
     self.currentMenu = "gallery"
     -- Use GaleryManager instead of StageSceneGallery
+    if ScreenUtils.clearFontCache then
+        ScreenUtils.clearFontCache()
+    end
     self.galleryPlayer = require("galeryManager").new()
     self.buttons = {} -- Clear previous buttons
     self.tabs = {}    -- Clear previous tabs
@@ -94,7 +102,7 @@ function Menu:loadGalleryMenu()
     local tabWidth = ScreenUtils.scaleValue(150)
     local tabHeight = ScreenUtils.scaleValue(40)
     local tabSpacing = ScreenUtils.scaleValue(20)
-    local totalTabsWidth = (tabWidth * 3) + (tabSpacing * 2)
+    local totalTabsWidth = (tabWidth * 4) + (tabSpacing * 3) -- Atualizado para 4 tabs
     
     -- Calculate tab starting position
     local startX = (ScreenUtils.width - totalTabsWidth) / 2
@@ -114,7 +122,8 @@ function Menu:loadGalleryMenu()
     local tabsData = {
         {label = "Itens", tabName = "items"},
         {label = "Cenas de Fase", tabName = "stage"}, 
-        {label = "Cutscenes", tabName = "cutscenes"}
+        {label = "Cutscenes", tabName = "cutscenes"},
+        {label = "Fases", tabName = "levels"} -- Nova aba para fases
     }
 
     for i, data in ipairs(tabsData) do
@@ -158,7 +167,9 @@ function Menu:loadSettingsMenu()
     local Config = require "config"
     self.currentMenu = "settings"
     self.galleryPlayer = nil
-    
+    if ScreenUtils.clearFontCache then
+        ScreenUtils.clearFontCache()
+    end
     -- Calculate element sizes
     local elementWidth, elementHeight = ScreenUtils.getUIElementSize(200, 50)
     local toggleWidth, toggleHeight = ScreenUtils.getUIElementSize(90, 40)
@@ -445,6 +456,11 @@ end
 
 -- Handle window resize
 function Menu:resize(w, h)
+    -- Limpa o cache de fontes quando a janela é redimensionada
+    if ScreenUtils.clearFontCache then
+        ScreenUtils.clearFontCache()
+    end
+    
     -- Recreate current menu with new dimensions
     if self.currentMenu == "main" then
         self:loadMainMenu()
@@ -462,6 +478,28 @@ function Menu:resize(w, h)
     -- Notify gallery if it exists
     if self.galleryPlayer and self.galleryPlayer.resize then
         self.galleryPlayer:resize(w, h)
+    end
+end
+
+-- Implementar a conexão para jogar a fase diretamente da galeria
+function Menu:startLevelFromGallery(levelPath)
+    if not levelPath then return false end
+    
+    -- Criar instância do jogo se não existir
+    if not self.gameInstance then
+        self.gameInstance = require("game").new()
+    end
+    
+    -- Definir posição do círculo do jogo
+    self.gameInstance:setCirclePosition(0.8, 0.8)
+    
+    -- Carregar o nível
+    if self.gameInstance:loadLevel(levelPath) then
+        self.currentMenu = "gameplay"
+        return true
+    else
+        print("Falha ao carregar o nível da galeria: " .. tostring(levelPath))
+        return false
     end
 end
 

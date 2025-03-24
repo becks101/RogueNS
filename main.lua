@@ -34,6 +34,7 @@ function love.load()
     -- Load saved configurations
     Config.load()
     
+    initializeTestLevelHistoryData()
     -- Set up initial window
     local screenWidth, screenHeight = love.window.getDesktopDimensions()
     local windowWidth, windowHeight = 1024, 768
@@ -60,6 +61,9 @@ function love.load()
     
     -- Create menu instance
     menu = Menu.new()
+    
+    -- Armazenar referência global para que outros módulos possam acessar
+    _G.currentMenu = menu
     
     -- Set fallback font with good scaling
     local fontSize = ScreenUtils.scaleFontSize(14)

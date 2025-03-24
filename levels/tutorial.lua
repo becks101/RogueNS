@@ -3,6 +3,8 @@
 
 local fase = {
     nome = "Tutorial 01",
+    
+    IconeLarge = "assets/icons/frog4x.png", -- Ícone na galeria
     bpm = 75,      -- Define a velocidade base (beats per minute) mais lenta para tutorial
     duracao = 60,  -- Duração da fase em segundos
     fase_seed = 98765432,  -- Seed usada para geração de padrões

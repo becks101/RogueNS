@@ -2,7 +2,8 @@
 -- Exemplo de fase para o jogo de ritmo no novo sistema
 
 local fase = {
-    nome = "Tutorial 01",
+    nome = "Fase 1",
+    IconeLarge = "assets/icons/cat4x.png", -- Ícone na galeria
     bpm = 90,      -- Define a velocidade base (beats per minute)
     duracao = 50,  -- Duração da fase em segundos
     fase_seed = 13312212,  -- Seed usada para geração de padrões

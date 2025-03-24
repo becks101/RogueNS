@@ -32,6 +32,16 @@ local level = nil
 local points = 0
 local timeSinceLastBlock = 0
 
+-- Estado de pausa
+local isPaused = false
+
+-- Informações de estado para restaurar após pausa
+local gameState = {
+    blocks = nil,
+    points = 0,
+    timeSinceLastBlock = 0
+}
+
 -- Reference to external modules (lazy-loaded when needed)
 local levelCreator, phaseGenerator = nil, nil
 
@@ -171,6 +181,34 @@ local function calculateTrackPositions()
     end
 end
 
+-- Função para salvar o estado do jogo
+local function saveGameState()
+    -- Cria uma cópia profunda dos blocos
+    local blocksClone = {}
+    for i, block in ipairs(blocks) do
+        blocksClone[i] = {}
+        for k, v in pairs(block) do
+            blocksClone[i][k] = v
+        end
+    end
+    
+    gameState = {
+        blocks = blocksClone,
+        points = points,
+        timeSinceLastBlock = timeSinceLastBlock
+    }
+end
+
+-- Função para restaurar o estado do jogo
+local function restoreGameState()
+    if gameState.blocks then
+        blocks = gameState.blocks
+    end
+    
+    points = gameState.points
+    timeSinceLastBlock = gameState.timeSinceLastBlock
+end
+
 --------------------------
 -- PUBLIC API
 --------------------------
@@ -237,6 +275,7 @@ function gameplay.carregar(fase)
     blocks = {}
     points = 0
     timeSinceLastBlock = 0
+    isPaused = false
     
     return true
 end
@@ -244,6 +283,11 @@ end
 -- Updates the game state
 function gameplay.atualizar(dt, anguloEscudoInput)
     if not player or not level then return nil end
+    
+    -- Se o jogo estiver pausado, não atualiza o estado
+    if isPaused then
+        return nil
+    end
     
     -- Update player X position based on current position
     player.x = player.posicoesJogador[player.posicaoAtual]
@@ -297,7 +341,7 @@ function gameplay.desenhar(drawUI)
     -- Game title at the top
     love.graphics.setColor(0.6, 0.5, 0.7, 0.9)
     local fontSize = math.max(10, math.floor(gameWidth / 15))
-    local font = love.graphics.newFont(fontSize)
+    local font = ScreenUtils.getFont(fontSize)
     love.graphics.setFont(font)
     love.graphics.printf("Rhythm Game", 0, 10, gameWidth, "center")
     
@@ -396,13 +440,32 @@ function gameplay.desenhar(drawUI)
         -- Draw score with better visibility
         love.graphics.setColor(0.95, 0.95, 1)
         local uiFontSize = math.max(10, math.floor(gameWidth / 20))
-        local uiFont = love.graphics.newFont(uiFontSize)
+        local uiFont = ScreenUtils.getFont(uiFontSize)
         love.graphics.setFont(uiFont)
         love.graphics.print("Pontuação: " .. points, 10, 15)
         
         -- Draw level if available
         if level and level.dificuldade then
             love.graphics.print("Nível: " .. level.dificuldade, 10, 35)
+        end
+        
+        -- Se o jogo estiver pausado, mostra um ícone de pausa
+        if isPaused then
+            love.graphics.setColor(1, 1, 1, 0.8)
+            -- Ícone de pausa (dois retângulos verticais)
+            local pauseX = gameWidth - 30
+            local pauseY = 25
+            local pauseWidth = 8
+            local pauseHeight = 20
+            local pauseGap = 5
+            
+            love.graphics.rectangle("fill", 
+                pauseX, pauseY, 
+                pauseWidth, pauseHeight)
+                
+            love.graphics.rectangle("fill", 
+                pauseX + pauseWidth + pauseGap, pauseY, 
+                pauseWidth, pauseHeight)
         end
     end
     
@@ -451,9 +514,34 @@ function gameplay.keypressed(key)
     end
 end
 
--- For compatibility with existing code
-function gameplay.pausar() end
-function gameplay.continuar() end
+-- Pauses the game
+function gameplay.pausar()
+    if not isPaused then
+        -- Salva o estado atual do jogo
+        saveGameState()
+        
+        -- Marca como pausado
+        isPaused = true
+    end
+end
+
+-- Resumes the game
+function gameplay.continuar()
+    if isPaused then
+        -- Restaura o estado do jogo se necessário
+        if gameState.blocks then
+            restoreGameState()
+        end
+        
+        -- Marca como não pausado
+        isPaused = false
+    end
+end
+
+-- Verifica se o jogo está pausado
+function gameplay.isPaused()
+    return isPaused
+end
 
 -- Handle window resize
 function gameplay.onResize()

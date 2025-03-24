@@ -14,6 +14,9 @@ ScreenUtils.baseWidth = 800 -- Base dimensions for reference
 ScreenUtils.baseHeight = 600
 ScreenUtils.aspectRatio = ScreenUtils.width / ScreenUtils.height
 
+-- Cache de fontes para evitar recriação constante
+ScreenUtils.fontCache = {}
+
 -- Initialize on first load
 function ScreenUtils.init()
     local width, height = love.graphics.getDimensions()
@@ -29,10 +32,36 @@ function ScreenUtils.updateDimensions(width, height)
     -- Calculate a global scale factor based on height
     ScreenUtils.scale = height / ScreenUtils.baseHeight
     
+    -- Limpa o cache de fontes quando as dimensões da tela mudam
+    ScreenUtils.clearFontCache()
+    
     -- Broadcast dimension change to all listeners
     if ScreenUtils.onDimensionsChanged then
         ScreenUtils.onDimensionsChanged(width, height, ScreenUtils.scale)
     end
+end
+
+-- Limpa o cache de fontes (deve ser chamado quando mudar de modo de tela)
+function ScreenUtils.clearFontCache()
+    ScreenUtils.fontCache = {}
+end
+
+-- Função melhorada para obter uma fonte escalada
+function ScreenUtils.getFont(baseSize)
+    -- Calcula o tamanho da fonte baseado na escala da tela
+    local fontSize = ScreenUtils.scaleFontSize(baseSize)
+    
+    -- Cria uma chave única para essa fonte no cache
+    local cacheKey = "font_" .. fontSize
+    
+    -- Verifica se a fonte já está em cache
+    if not ScreenUtils.fontCache[cacheKey] then
+        -- Cria uma nova fonte com o tamanho calculado
+        ScreenUtils.fontCache[cacheKey] = love.graphics.newFont(fontSize)
+    end
+    
+    -- Retorna a fonte do cache
+    return ScreenUtils.fontCache[cacheKey]
 end
 
 -- Convert percentage to actual screen coordinates

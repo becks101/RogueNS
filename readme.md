@@ -36,6 +36,7 @@ Rhythm Game é um jogo musical desenvolvido em Lua usando o framework LÖVE2D. O
 |-- main.lua           # Ponto de entrada do jogo
 |-- menu.lua           # Sistema de menus
 |-- save.lua           # Sistema de salvamento
+|-- screen_utils.lua   # Utilitários para gestão de tela e responsividade
 |-- stagescenes.lua    # Sistema de exibição de cenas de fase
 |-- readme.md          # Documentação básica do projeto
 ```
@@ -50,38 +51,59 @@ O ponto de entrada da aplicação, configura callbacks do framework LÖVE2D e in
 - `love.load()`: Inicializa configurações, cria a janela e instancia o menu.
 - `love.update(dt)`: Atualiza o jogo frame a frame.
 - `love.draw()`: Renderiza os elementos na tela.
-- `love.resize(w, h)`: Adapta o jogo a mudanças no tamanho da janela.
+- `love.resize(w, h)`: Adapta o jogo a mudanças no tamanho da janela, utilizando ScreenUtils.
 
-### 2. `menu.lua`
+### 2. `screen_utils.lua` (Novo)
 
-Gerencia a navegação entre os diferentes estados e menus do jogo.
+Um módulo central para gerenciar dimensões de tela, escalas e posicionamento responsivo em todo o jogo.
+
+**Funções Principais:**
+- `ScreenUtils.init()`: Inicializa as dimensões iniciais.
+- `ScreenUtils.updateDimensions(width, height)`: Atualiza dimensões quando a tela muda de tamanho.
+- `ScreenUtils.relativeToScreen(percentX, percentY)`: Converte porcentagens em coordenadas de tela.
+- `ScreenUtils.scaleValue(value)`: Escala um valor com base no tamanho da tela.
+- `ScreenUtils.scaleFontSize(baseSize)`: Calcula tamanho de fonte que escala com a tela.
+- `ScreenUtils.centerElement(width, height)`: Calcula posição centralizada para elementos.
+- `ScreenUtils.anchoredPosition(width, height, anchor)`: Posiciona elementos com diferentes ancoragens.
+- `ScreenUtils.gridPosition(column, row, itemWidth, itemHeight)`: Calcula posições em grid para galerias.
+
+### 3. `menu.lua`
+
+Gerencia a navegação entre os diferentes estados e menus do jogo, agora com layout responsivo.
 
 **Funções Principais:**
 - `Menu.new()`: Cria uma nova instância do sistema de menus.
-- `Menu:loadMainMenu()`: Carrega o menu principal.
+- `Menu:loadMainMenu()`: Carrega o menu principal com posicionamento responsivo.
 - `Menu:loadGalleryMenu()`: Carrega o menu da galeria.
 - `Menu:loadSettingsMenu()`: Carrega o menu de configurações.
 - `Menu:update(dt)`: Atualiza o estado do menu atual.
 - `Menu:draw()`: Renderiza o menu atual.
-- `Menu:mousepressed(x, y, button)`: Gerencia cliques nos elementos do menu.
-- `Menu:keypressed(key)`: Processa entrada do teclado.
+- `Menu:resize(w, h)`: Adapta os menus quando a janela é redimensionada.
 
-### 3. `game.lua`
+### 4. `config.lua`
 
-Gerencia o estado de jogo e a lógica de nível.
+Gerencia as configurações do jogo, com manipulação robusta do modo fullscreen.
+
+**Funções Principais:**
+- `Config.setFullscreen(value)`: Alterna entre modo janela e tela cheia com preservação de estado.
+- `Config.setVolume(value)`: Define o nível de volume.
+- `Config.load()`: Carrega configurações salvas.
+- `Config.getScreenInfo()`: Retorna informações do modo de tela atual.
+- `Config.centerWindow()`: Centraliza a janela na tela quando não está em fullscreen.
+
+### 5. `game.lua`
+
+Gerencia o estado de jogo e a lógica de nível, com integração ao sistema de responsividade.
 
 **Funções Principais:**
 - `Game.new()`: Cria uma nova instância do gerenciador de jogo.
+- `Game:calculateDimensions()`: Recalcula dimensões do jogo com base no tamanho da tela.
 - `Game:loadLevel(levelModule)`: Carrega uma fase a partir de seu módulo.
 - `Game:update(dt)`: Atualiza o estado do jogo.
 - `Game:draw()`: Renderiza o jogo com stage scene e gameplay.
-- `Game:keypressed(key)`: Processa entrada do teclado para o jogo.
 - `Game:resize(w, h)`: Adapta o jogo a mudanças no tamanho da janela.
-- `Game.newLevelCreator()`: Cria um gerador de níveis.
-- `Game.newPhaseGenerator()`: Cria um gerador de fases com seeds.
-- `Game.formatSeed()`: Formata uma seed para apresentação visual.
 
-### 4. `gameplay.lua` (Atualizado)
+### 6. `gameplay.lua`
 
 Implementa a mecânica central do jogo de ritmo com blocos que caem em trilhas.
 
@@ -89,256 +111,105 @@ Implementa a mecânica central do jogo de ritmo com blocos que caem em trilhas.
 - `gameplay.setDimensoes(width, height)`: Define as dimensões da área de gameplay.
 - `gameplay.setOffset(x, y)`: Posiciona a área de gameplay na tela.
 - `gameplay.carregar(fase)`: Carrega uma fase no sistema de gameplay.
-- `gameplay.atualizar(dt, anguloEscudoInput)`: Atualiza o estado do gameplay.
-- `gameplay.desenhar(desenharUI)`: Renderiza o gameplay com trilhas, blocos e jogador.
-- `gameplay.keypressed(key)`: Processa entrada de teclado para movimentação.
-- `gameplay.getPontuacao()`: Obtém a pontuação atual.
-- `gameplay.getCombo()`: Obtém o combo atual.
-- `gameplay.getMultiplicador()`: Obtém o multiplicador atual.
+- `gameplay.atualizar(dt)`: Atualiza o estado do gameplay.
+- `gameplay.desenhar(desenharUI)`: Renderiza o gameplay com adaptação ao tamanho da tela.
+- `gameplay.onResize()`: Manipula eventos de redimensionamento.
+- `gameplay.init()`: Inicializa ou reinicializa dimensões e posicionamento.
 
-### 5. `cutscenes.lua`
+### 7. `cutscenes.lua`
 
-Sistema para exibir sequências narrativas interativas.
+Sistema para exibir sequências narrativas interativas, agora com layout totalmente responsivo.
 
 **Funções Principais:**
 - `Cutscenes.new(cutsceneFile)`: Cria uma nova instância de cutscene.
+- `Cutscenes:updateScaledDimensions()`: Atualiza dimensões de UI com base no tamanho da tela.
 - `Cutscenes:load()`: Carrega os dados da cutscene.
-- `Cutscenes:processCurrentStep()`: Processa o passo atual da cutscene.
-- `Cutscenes:update(dt)`: Atualiza o estado da cutscene.
-- `Cutscenes:draw()`: Renderiza a cutscene.
-- `Cutscenes:mousepressed(x, y, button)`: Processa cliques do mouse.
-- `Cutscenes:keypressed(key)`: Processa entrada do teclado.
-- `Cutscenes:complete()`: Finaliza a cutscene.
+- `Cutscenes:draw()`: Renderiza a cutscene com elementos adaptados à tela.
+- `Cutscenes:resize(width, height)`: Adapta a cutscene quando a janela é redimensionada.
 
-### 6. `button.lua`
+### 8. `galeryManager.lua`
 
-Implementa os componentes de UI usados em todo o jogo.
-
-**Classes Implementadas:**
-- `Button`: Botão padrão clicável.
-- `Selector`: Botão que mantém estado de seleção.
-- `Tab`: Botão específico para navegação entre abas.
-- `VolumeSlider`: Controle deslizante para ajuste de volume.
-- `GaleryIcons`: Ícones interativos para a galeria.
-
-### 7. `galeryManager.lua`
-
-Sistema para visualização de conteúdo desbloqueado pelo jogador.
+Sistema para visualização de conteúdo desbloqueado pelo jogador, agora com layout responsivo.
 
 **Funções Principais:**
 - `GaleryManager.new()`: Cria nova instância do gerenciador de galeria.
-- `GaleryManager:refreshIcons()`: Atualiza os ícones com base na aba atual.
-- `GaleryManager:update(dt)`: Atualiza o estado da galeria.
-- `GaleryManager:draw()`: Renderiza a galeria.
-- `GaleryManager:mousepressed(x, y, button)`: Processa interações do mouse.
-- `GaleryManager:keypressed(key)`: Processa entrada do teclado.
+- `GaleryManager:refreshIcons()`: Atualiza os ícones com posicionamento adaptado à tela.
+- `GaleryManager:resize(w, h)`: Adapta a galeria quando a janela é redimensionada.
 
-### 8. `flagsSystem.lua`
+### 9. `stagescenes.lua`
 
-Sistema para gerenciar flags, achievements e recompensas.
+Sistema para apresentação de cenas de fundo animadas, corrigido para funcionar em todas as resoluções.
 
 **Funções Principais:**
-- `FlagsSystem.updateRhythmGameData(gameplay)`: Atualiza dados do jogo.
-- `FlagsSystem.resetRhythmGameData(level)`: Reseta dados para nova fase.
-- `FlagsSystem.checkAchievement(achievement)`: Verifica um achievement específico.
-- `FlagsSystem.checkAllAchievements(fase)`: Verifica todos os achievements.
-- `FlagsSystem.finalizeFase(reason)`: Finaliza a fase atual.
-- `FlagsSystem.saveState()`: Salva o estado das flags.
-- `FlagsSystem.loadState()`: Carrega o estado salvo.
-- `FlagsSystem.setFlag(flagName, value)`: Define uma flag.
-- `FlagsSystem.getFlag(flagName)`: Obtém o valor de uma flag.
+- `StageScene.new(stageSceneModule)`: Cria uma nova instância de cena de palco.
+- `StageScene:load()`: Carrega recursos da cena.
+- `StageScene:draw()`: Renderiza a cena adaptada ao tamanho da tela.
+- `StageScene:resize(width, height)`: Adapta a cena quando a janela é redimensionada.
 
-## Novo Sistema de Gameplay (Atualizado)
+## Sistema de Responsividade
 
-O sistema de gameplay foi completamente reformulado, substituindo o anterior baseado em escudo e lasers por um novo baseado em trilhas e blocos:
+O jogo agora implementa um sistema completo de responsividade que garante funcionamento consistente em modo janela e tela cheia:
 
-### Mecânica Principal
+### 1. Arquitetura Centralizada
+- O módulo `screen_utils.lua` centraliza o gerenciamento de dimensões da tela
+- Todos os módulos utilizam funções deste utilitário para calcular posições e escalas
+- Eventos de redimensionamento são propagados para todos os componentes relevantes
 
-1. **Estrutura Visual:**
-   - O gameplay é exibido como um painel semitransparente à direita da tela
-   - A área de gameplay tem largura fixa entre 160-200 pixels, com altura proporcional
-   - A stage scene é mostrada em tela completa como plano de fundo
-   - O gameplay funciona como um overlay sobre a stage scene
+### 2. UI Adaptativa
+- Os elementos de UI agora escalam proporcionalmente ao tamanho da tela
+- Botões, textos e ícones mantêm proporções consistentes em qualquer resolução
+- Menus são reposicionados automaticamente para funcionar bem em qualquer tamanho de tela
 
-2. **Elementos do Jogo:**
-   - **Trilhas**: 4 caminhos verticais por onde os blocos caem
-   - **Blocos**: Quadrados coloridos que caem nas trilhas em ritmo sincronizado com a música
-   - **Jogador**: Círculo que se move entre as trilhas para capturar os blocos
-   - **Pontuação**: Sistema de pontos baseado em acertos
+### 3. Gerenciamento de Tela Cheia
+- Transição suave entre modo janela e tela cheia
+- Preservação de estado e dimensões ao alternar entre modos
+- Controle de proporções para evitar distorções visuais
 
-3. **Controles:**
-   - **Seta Esquerda**: Move o jogador para a trilha à esquerda
-   - **Seta Direita**: Move o jogador para a trilha à direita
+### 4. Escalabilidade de Fontes
+- Tamanhos de fonte adaptativos que escalam com a resolução 
+- Limites mínimos para garantir legibilidade em qualquer tamanho de tela
+- Consistência visual entre diferentes resoluções
 
-4. **Geração de Fases:**
-   - Sistema de seed para geração procedural de fases
-   - Cada fase tem um BPM (batidas por minuto) que determina a velocidade dos blocos
-   - Configurações de dificuldade, velocidade e intervalo de blocos ajustáveis
+### 5. Posicionamento Relativo
+- Sistema de posicionamento baseado em porcentagens da tela
+- Funções auxiliares para ancorar elementos em diferentes pontos da tela
+- Sistema de grid para organização de elementos em galerias e menus
 
-5. **Adaptação a Diferentes Telas:**
-   - Sistema de posicionamento absoluto em pixels para consistência visual
-   - Funciona corretamente tanto em modo janela quanto em fullscreen
-   - Cálculos de posição e tamanho arredondados para evitar problemas visuais
+## Gameplay Responsivo
 
-### Implementação Técnica
+### Área de Jogo
+- Dimensões calculadas com base em porcentagem da tela e limites fixos
+- Posicionamento consistente mesmo com mudanças de resolução
+- Escalabilidade de todos os elementos visuais
 
-1. **Posicionamento:**
-   - Área de gameplay sempre à direita da tela, com distância fixa da borda
-   - Trilhas igualmente espaçadas dentro da área de gameplay
-   - Blocos sempre centrados em suas trilhas
-   - Jogador posicionado próximo ao fundo da área, com altura fixa
+### Renderização
+- Sistema de trilhas que se adapta a diferentes alturas de tela
+- Blocos com tamanho proporcional à largura da área de jogo
+- Interface de usuário que escala automaticamente
 
-2. **Renderização:**
-   - Fundo semitransparente com cantos arredondados
-   - Trilhas com cores diferentes para a trilha ativa (onde está o jogador)
-   - Blocos com cores diferentes e efeitos visuais (sombras, brilhos, cantos arredondados)
-   - Interface do usuário mostrando pontuação e nível atual
+### Interação
+- Zonas de clique que se ajustam ao tamanho da tela
+- Consistência de controles em qualquer resolução
+- Feedback visual que funciona bem em todas as escalas
 
-3. **Colisões:**
-   - Sistema de colisão entre o jogador (círculo) e os blocos (retângulos)
-   - Quando há colisão, o bloco é removido e o jogador ganha pontos
-   - Blocos que saem da tela sem serem capturados são removidos sem pontuação
+## Correções e Melhorias
 
-## Estrutura de Arquivos de Dados
+### Correções de Bugs
+- Corrigido erro ao chamar `getWidth()` em quads no módulo `stagescenes.lua`
+- Corrigido posicionamento incorreto em resoluções altas
+- Corrigido problemas de sobreposição em modo tela cheia
+- Corrigidos erros de syntax em várias funções
 
-### 1. Formato de Arquivo de Fase (levels/...)
+### Melhorias de Desempenho
+- Otimização do cálculo de dimensões para minimizar recálculos desnecessários
+- Uso mais eficiente de memória com reutilização de recursos
+- Melhor tratamento de eventos de redimensionamento
 
-```lua
-local fase = {
-    nome = "Nome da Fase",
-    bpm = 90,               -- Batidas por minuto
-    duracao = 60,           -- Duração em segundos
-    fase_seed = 13312212,   -- Seed para geração procedural
-    
-    -- Parâmetros específicos de gameplay
-    velocidade = 180,       -- Velocidade de queda dos blocos
-    intervalo = 0.7,        -- Intervalo entre blocos em segundos
-    dificuldade = 1,        -- Nível de dificuldade
-    
-    -- Cores customizadas (opcional)
-    cores = {
-        {0.92, 0.7, 0.85},  -- Rosa pastel
-        {0.7, 0.9, 0.8},    -- Verde mint
-        {0.7, 0.8, 0.95},   -- Azul céu
-        {0.97, 0.9, 0.7}    -- Amarelo pastel
-    },
-    
-    -- Stage scene para introdução
-    animation = "stages/nome_da_animacao",
-    
-    -- Achievements da fase
-    achievements = {
-        {
-            id = "ID_Achievement",
-            condition = "combo_maximo",
-            value = 10,
-            reward_type = "fase",
-            reward_value = "proxima_fase"
-        },
-        -- Mais achievements...
-    }
-}
-```
-
-### 2. Formato de Arquivo de Cutscene (cutscenes/...)
-
-```lua
-local cutsceneData = {
-    nome = "Nome da Cutscene",
-    IconeLarge = "assets/icons/icone.png",
-    background = "assets/backgrounds/fundo.jpg",
-    
-    -- Personagens
-    characters = {
-        personagem1 = {
-            name = "Nome Exibido",
-            portrait = "assets/portraits/retrato.png"
-        },
-        -- Mais personagens...
-    },
-    
-    -- Passos da cutscene
-    steps = {
-        {
-            text = "Texto do diálogo",
-            speaker = "personagem1",
-            sprites = {
-                {
-                    image = "assets/sprites/sprite.png",
-                    x = 0.7,    -- Posição horizontal relativa
-                    y = 0.5,    -- Posição vertical relativa
-                    scale = 1.0 -- Escala
-                },
-                -- Mais sprites...
-            }
-        },
-        -- Mais passos...
-    }
-}
-```
-
-## Fluxo de Execução do Jogo
-
-1. **Inicialização**: 
-   - `main.lua` carrega configurações com `Config.load()`
-   - Cria instância de `Menu` com `Menu.new()`
-
-2. **Menu Principal**:
-   - Jogador seleciona "Novo Jogo"
-   - Menu cria instância de `Cutscenes` carregando a cutscene introdutória
-   - Altera estado para `"cutscene"`
-
-3. **Cutscene**:
-   - Reproduz a cutscene exibindo diálogos e sprites
-   - Jogador interage avançando diálogos e fazendo escolhas
-   - Ao selecionar um caminho, a cutscene define `levelToLoad`
-   - Ao finalizar, envia o nível para ser carregado
-
-4. **Carregamento de Fase**:
-   - Menu cria instância de `Game` com `Game.new()`
-   - Carrega nível com `Game:loadLevel(levelPath)`
-   - Inicia fase com animação se especificada
-
-5. **Gameplay**:
-   - Jogador controla o círculo para capturar blocos
-   - `Game:update()` atualiza a cena com entrada do jogador
-   - `FlagsSystem` monitora condições para achievements
-   - `Gameplay` gerencia a lógica dos blocos, trilhas e colisões
-
-6. **Conclusão de Fase**:
-   - Ao completar fase, `Gameplay` retorna "fase_concluida"
-   - `FlagsSystem` verifica achievements
-   - Carrega próxima fase ou retorna ao menu principal
-
-## Sistema de Interação
-
-### Controles Padrão
-- **Setas Esquerda/Direita**: Movem o jogador entre as trilhas
-- **Espaço/Enter**: Avança o diálogo em cutscenes
-- **Mouse**: Seleciona opções nos menus e cutscenes
-- **Escape**: Sai da fase atual para o menu principal
-- **Alt+Enter/F11**: Alterna modo tela cheia
-
-## Progressão de Jogo
-
-O jogo implementa um sistema de progressão completo através do `flagsSystem.lua`:
-
-1. **Achievements e Recompensas**:
-   - Achievements são verificados durante o gameplay
-   - Tipos de recompensas:
-     - `fase`: Desbloqueia novas fases
-     - `stage_scene`: Desbloqueia cenas para a galeria
-     - `cutscene`: Desbloqueia cutscenes para a galeria
-
-2. **Persistência de Dados**:
-   - Utiliza `save.lua` para salvar progresso
-   - Armazena configurações, flags, achievements e itens coletados
-
-3. **Sistema de Seed**:
-   - Fases são geradas proceduralmente com base em seeds
-   - Cada fase tem uma seed única que determina o padrão de blocos
-   - Uma "run seed" global pode ser combinada com a seed da fase para criar variações
+### Melhorias Visuais
+- Maior consistência visual entre diferentes resoluções
+- Melhor escalabilidade de elementos gráficos
+- Transições mais suaves entre diferentes estados do jogo
 
 ## Conclusão
 
-Esta documentação reflete o estado atual do jogo Rhythm Game, incluindo o novo sistema de gameplay baseado em trilhas e blocos que substituiu o antigo sistema de escudo e lasers. O jogo mantém sua arquitetura modular e extensibilidade, permitindo adicionar facilmente novas fases, cutscenes e conteúdo para a galeria.
+Com as melhorias implementadas, o Rhythm Game agora oferece uma experiência consistente e responsiva tanto em modo janela quanto em tela cheia. O sistema centralizado de gerenciamento de tela proporciona uma base sólida para expansões futuras, enquanto a arquitetura modular existente foi mantida e aprimorada.

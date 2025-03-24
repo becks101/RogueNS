@@ -8,6 +8,7 @@ local ScreenUtils = require "screen_utils"
 local FlagsSystem = require "flagsSystem"
 local Gameplay = require "gameplay"
 local Config = require "config"
+local ButtonTypes = require "button"
 
 local Game = {}
 Game.__index = Game
@@ -21,6 +22,9 @@ function Game.new()
     -- Positioning configuration
     self.positionRatioX = 0.5  -- 50% of screen width
     self.positionRatioY = 0.5  -- 50% of screen height
+    
+    -- Pause menu buttons
+    self.pauseButtons = {}
     
     -- Calculate game dimensions
     self:calculateDimensions()
@@ -36,7 +40,60 @@ function Game.new()
     -- Load saved state
     FlagsSystem.loadState()
     
+    -- Initialize pause menu
+    self:setupPauseMenu()
+    
     return self
+end
+
+-- Configura os botões do menu de pausa
+function Game:setupPauseMenu()
+    -- Limpa os botões existentes
+    self.pauseButtons = {}
+    
+    -- Determina as dimensões dos botões
+    local btnWidth, btnHeight = ScreenUtils.getUIElementSize(200, 50)
+    local spacing = ScreenUtils.scaleValue(20)
+    local startY = ScreenUtils.height / 2 - (btnHeight * 3 + spacing * 2) / 2
+    
+    -- Botão para Continuar
+    table.insert(self.pauseButtons, ButtonTypes.Button.new(
+        ScreenUtils.centerElement(btnWidth, btnHeight),
+        startY,
+        btnWidth,
+        btnHeight,
+        "Continuar",
+        function() 
+            self:resume() 
+        end
+    ))
+    
+    -- Botão para Reiniciar Fase
+    table.insert(self.pauseButtons, ButtonTypes.Button.new(
+        ScreenUtils.centerElement(btnWidth, btnHeight),
+        startY + btnHeight + spacing,
+        btnWidth,
+        btnHeight,
+        "Reiniciar Fase",
+        function() 
+            if self.currentLevel then
+                local levelPath = self.currentLevelPath
+                self:loadLevel(levelPath)
+            end
+        end
+    ))
+    
+    -- Botão para Voltar ao Menu
+    table.insert(self.pauseButtons, ButtonTypes.Button.new(
+        ScreenUtils.centerElement(btnWidth, btnHeight),
+        startY + (btnHeight + spacing) * 2,
+        btnWidth,
+        btnHeight,
+        "Voltar ao Menu",
+        function() 
+            self.state = "menu"
+        end
+    ))
 end
 
 -- Calculates game dimensions based on screen size
@@ -87,6 +144,9 @@ function Game:loadLevel(levelModule)
     if levelModule:sub(-4) == ".lua" then
         moduleName = levelModule:sub(1, -5)
     end
+    
+    -- Guarda o caminho do nível para reiniciar se necessário
+    self.currentLevelPath = moduleName
     
     -- Try to load level module
     local success, level = pcall(require, moduleName)
@@ -166,6 +226,18 @@ function Game:update(dt)
                 return "fase_concluida"
             end
         end
+    elseif self.state == "paused" then
+        -- Atualiza os botões do menu de pausa
+        local mx, my = love.mouse.getPosition()
+        for _, button in ipairs(self.pauseButtons) do
+            if button.updateHover then
+                button:updateHover(mx, my)
+            end
+            
+            if button.update then
+                button:update(dt)
+            end
+        end
     end
     
     return self.state
@@ -173,7 +245,7 @@ end
 
 -- Draws the game
 function Game:draw()
-    if self.state == "playing" then
+    if self.state == "playing" or self.state == "paused" then
         -- Draw stage scene first as background
         if self.stageScene then
             self.stageScene:draw()
@@ -181,24 +253,65 @@ function Game:draw()
         
         -- Then draw gameplay overlay in right area
         Gameplay.desenhar(true) -- true to draw UI
+        
+        -- Se estiver pausado, desenha o menu de pausa
+        if self.state == "paused" then
+            -- Overlay escuro semi-transparente
+            love.graphics.setColor(0, 0, 0, 0.7)
+            love.graphics.rectangle("fill", 0, 0, ScreenUtils.width, ScreenUtils.height)
+            
+            -- Título "PAUSE"
+            love.graphics.setColor(1, 1, 1)
+            -- Use a nova função para obter a fonte
+            local font = ScreenUtils.getFont(30)
+            love.graphics.setFont(font)
+            
+            local titleText = "PAUSADO"
+            local textWidth = font:getWidth(titleText)
+            love.graphics.print(
+                titleText, 
+                ScreenUtils.width / 2 - textWidth / 2, 
+                ScreenUtils.height / 4
+            )
+            
+            -- Desenha os botões do menu de pausa
+            for _, button in ipairs(self.pauseButtons) do
+                button:draw()
+            end
+            
+            -- Restaura a cor
+            love.graphics.setColor(1, 1, 1)
+        end
     end
 end
 
 -- Handles key presses
 function Game:keypressed(key)
-    if self.state == "playing" then
-        if key == "escape" then
-            self.state = "menu"
-        else
-            -- Pass keys to gameplay
-            Gameplay.keypressed(key)
+    if key == "escape" then
+        -- Toggle entre jogando e pausado
+        if self.state == "playing" then
+            self:pause()
+        elseif self.state == "paused" then
+            self:resume()
+        elseif self.state == "menu" then
+            -- Já está no menu, ignora
         end
+    elseif self.state == "playing" then
+        -- Só processa outras teclas quando jogando
+        Gameplay.keypressed(key)
     end
 end
 
 -- Handles mouse presses
 function Game:mousepressed(x, y, button)
-    -- Future implementation if needed
+    if self.state == "paused" then
+        -- Processa cliques nos botões do menu de pausa
+        for _, btn in ipairs(self.pauseButtons) do
+            if btn.mousepressed then
+                btn:mousepressed(x, y, button)
+            end
+        end
+    end
 end
 
 -- Pauses the game
@@ -231,6 +344,9 @@ function Game:resize(w, h)
     if self.stageScene and self.stageScene.resize then
         self.stageScene:resize(w, h)
     end
+    
+    -- Recria os botões do menu de pausa
+    self:setupPauseMenu()
 end
 
 -- Static functions for level creation
